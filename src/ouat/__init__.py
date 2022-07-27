@@ -1,18 +1,21 @@
 import asyncio
-from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Coroutine, Dict, Generic, List, Optional, Sequence, Set, Tuple, Type, TypeVar
+from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Optional, Sequence, Set, Tuple, Type, TypeVar
+from ouat.bounded_stream import BoundedStream
+from ouat.stream import Stream
+from ouat.task_manager import TaskManager
 
 
 X = TypeVar("X")
 INDEX_MARKER = "entity_index"
 IMPLEMENTATION_MARKER = "entity_implementation"
+PRODUCT_MARKER = "product_marker"
 
 
-def index(func: Callable[["O"], X]) -> Callable[["O"], X]:
+def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     """
     Mark the current method as an index for the class it is a method of.
     """
-    cache: Dict["O", X] = dict()
+    cache: Dict["E", X] = dict()
 
     def index_or_cache(self) -> X:
         if self not in cache:
@@ -26,12 +29,12 @@ def index(func: Callable[["O"], X]) -> Callable[["O"], X]:
     return index_or_cache
 
 
-def implementation(*, condition: Callable[["O"], Coroutine[Any, Any, bool]]) -> Callable[[Callable[["O"], Coroutine[Any, Any, None]]], None]:
+def implementation(*, condition: Callable[["E"], Coroutine[Any, Any, bool]]) -> Callable[[Callable[["E"], Coroutine[Any, Any, None]]], None]:
     """
     Mark the current method as an implementation, which should only be selected if
     the condition resolves to True.
     """
-    def implementation_input(func: Callable[["O"], Coroutine[Any, Any, bool]]) -> None:
+    def implementation_input(func: Callable[["E"], Coroutine[Any, Any, bool]]) -> None:
         async def implementation_if_selected(self) -> None:
             selected = await condition(self)
             if not selected:
@@ -46,14 +49,52 @@ def implementation(*, condition: Callable[["O"], Coroutine[Any, Any, bool]]) -> 
     return implementation_input
 
 
+def stream(func: Callable[["E"], Type[X]]) -> Callable[["E"], Stream[X]]:
+    """
+    Mark the current method as a stream, on which will be added and potentially
+    subscribed items
+    """
+    cache: Dict[Tuple["E", Callable[["E"], Type[X]]], Stream[X]] = dict()
+
+    def stream_or_cache(self) -> Stream[X]:
+        if (self, func) not in cache:
+            print(f"Initiating stream for {func.__name__} of {self}")
+            cache[(self, func)] = Stream(func(self))
+        
+        return cache[(self, func)]
+    
+    return stream_or_cache
+
+
+def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["E"], Type[X]]], Callable[["E"], BoundedStream[X]]]:
+
+    def bounded_stream_input(func: Callable[["E"], Type[X]]) -> Callable[["E"], BoundedStream[X]]:
+        """
+        Mark the current method as a stream, on which will be added and potentially
+        subscribed items
+        """
+        cache: Dict[Tuple["E", Callable[["E"], Type[X]]], BoundedStream[X]] = dict()
+
+        def stream_or_cache(self) -> BoundedStream[X]:
+            if (self, func) not in cache:
+                print(f"Initiating stream for {func.__name__} of {self}")
+                cache[(self, func)] = BoundedStream(func(self), min=min, max=max)
+            
+            return cache[(self, func)]
+        
+        return stream_or_cache
+
+    return bounded_stream_input
+
+
 def output(__type: Type[X]) -> Awaitable[X]:
     return asyncio.Future()
 
 
 class EntityType(type):
-    _entities: Set[Type["O"]] = set()
+    _entities: Set[Type["E"]] = set()
 
-    def __call__(cls: Type["O"], *args: Any, **kwds: Any) -> Any:
+    def __call__(cls: Type["E"], *args: Any, **kwds: Any) -> Any:
         if cls in cls._entities:
             return cls.__new__(cls, *args, **kwds)
 
@@ -78,13 +119,13 @@ class EntityType(type):
 
 class Entity(metaclass=EntityType):
 
-    __indices: Sequence[Callable[["O"], X]]
-    __implementations: Sequence[Callable[["O"], Coroutine[Any, Any, None]]]
+    __indices: Sequence[Callable[["E"], X]]
+    __implementations: Sequence[Callable[["E"], Coroutine[Any, Any, None]]]
 
-    __queries: Optional[Dict[Tuple[Callable[["O"], X], X], asyncio.Future]] = None
-    __instances: Optional[Set["O"]] = None
+    __queries: Optional[Dict[Tuple[Callable[["E"], X], X], asyncio.Future]] = None
+    __instances: Optional[Set["E"]] = None
 
-    def __new__(cls: type["O"], *args, **kwargs) -> "O":
+    def __new__(cls: type["E"], *args, **kwargs) -> "E":
         new_instance = object.__new__(cls)
         new_instance.__init__(*args, **kwargs)
         for instance in cls.instances():
@@ -92,7 +133,7 @@ class Entity(metaclass=EntityType):
                 if indice(new_instance) == indice(instance):
                     return instance
         
-        resolved: List[Tuple[Callable[["O"], X], X]] = []
+        resolved: List[Tuple[Callable[["E"], X], X]] = []
         for (index, arg), future in cls.queries():
             if index(new_instance) == arg:
                 future.set_value(new_instance)
@@ -107,7 +148,7 @@ class Entity(metaclass=EntityType):
 
         for implementation in cls.__implementations:
             to_be_awaited = implementation(new_instance)
-            loop.create_task(to_be_awaited)
+            TaskManager.register(loop.create_task(to_be_awaited))
 
         return new_instance
 
@@ -124,27 +165,27 @@ class Entity(metaclass=EntityType):
         super().__setattr__(__name, __value)
 
     @classmethod
-    def register_indices(cls: Type["O"], indices: Sequence[Callable[["O"], X]]) -> None:
+    def register_indices(cls: Type["E"], indices: Sequence[Callable[["E"], X]]) -> None:
         cls.__indices = indices
 
     @classmethod
-    def register_implementations(cls: Type["O"], implementations: Sequence[Callable[["O"], Coroutine[Any, Any, None]]]) -> None:
+    def register_implementations(cls: Type["E"], implementations: Sequence[Callable[["E"], Coroutine[Any, Any, None]]]) -> None:
         cls.__implementations = implementations
 
     @classmethod
-    def queries(cls: Type["O"]) -> Dict[Tuple[Callable[["O"], X], X], asyncio.Future]:
+    def queries(cls: Type["E"]) -> Dict[Tuple[Callable[["E"], X], X], asyncio.Future]:
         if cls.__queries is None:
             cls.__queries = dict()
         return cls.__queries
 
     @classmethod
-    def instances(cls: Type["O"]) -> Set["O"]:
+    def instances(cls: Type["E"]) -> Set["E"]:
         if cls.__instances is None:
             cls.__instances = set()
         return cls.__instances
 
     @classmethod
-    async def get(cls: Type["O"], *, index=Callable[[Type["O"]], X], arg=X) -> "O":
+    async def get(cls: Type["E"], *, index=Callable[[Type["E"]], X], arg=X) -> "E":
         if index not in cls.__indices:
             raise ValueError(
                 f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}"
@@ -165,4 +206,4 @@ class Entity(metaclass=EntityType):
         
         return await cls.queries()[query]
 
-O = TypeVar("O", bound=Entity)
+E = TypeVar("E", bound=Entity)

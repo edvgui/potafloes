@@ -1,8 +1,9 @@
 import asyncio
 import functools
-from typing import Any, Awaitable, Optional
+from typing import Any, Awaitable, Optional, Type
 
-from ouat import Entity, index, implementation, output
+from ouat import Entity, bounded_stream, index, implementation, output, stream
+from ouat.task_manager import TaskManager
 
 async def ok(person: "Person") -> bool:
     return True
@@ -40,9 +41,29 @@ class Person(Entity):
         self.likes_dogs = likes_dogs
         self.dog = output(Optional[Dog])
 
+    @bounded_stream(max=2)
+    def parents(self) -> Type["Person"]:
+        return Person
+
+    @stream
+    def children(self) -> Type["Person"]:
+        return Person
+
     @index
     def unique_name(self) -> str:
         return self.name
+
+    async def praise_child(self, child: "Person") -> None:
+        print(f"{self.name} says: {child.name} is my child!")
+
+    @implementation(condition=ok)
+    async def handle_children(self) -> None:
+        self.children().subscribe(self.praise_child)
+
+    @implementation(condition=ok)
+    async def handle_parents(self) -> None:
+        parents = await self.parents()
+        print(f"{self.name} says: {parents} are my parents!")
 
     @implementation(condition=ok)
     async def print_name(self) -> None:
@@ -64,16 +85,27 @@ class Person(Entity):
     def __repr__(self) -> str:
         return f"Person(name={self.name})"
 
-async def main() -> None:
+async def main() -> Person:
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
     will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
 
     bob = Person("bob", likes_dogs=True)
     marilyn = Person("marilyn", likes_dogs=False)
+    marilyn.parents().send(bob)
+    marilyn.parents().send(None)
+    bob.children().send(marilyn)
+    bob.parents().send(None)
+    bob.parents().send(None)
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
     print(bob == bob_2)
     print(bob == await will_be_bob)
     print(bob == await will_be_bob_2)
 
-asyncio.run(main())
+    await TaskManager.gather()
+
+    return bob
+
+bob = asyncio.run(main())
+print(bob.children().items)
+print(bob.children().callbacks)
