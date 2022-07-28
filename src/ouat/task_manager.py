@@ -13,4 +13,4 @@ class TaskManager:
     
     @staticmethod
     def gather() -> Future:
-        return asyncio.gather(*TaskManager.__tasks, return_exceptions=True)
+        return asyncio.gather(*TaskManager.__tasks, return_exceptions=False)

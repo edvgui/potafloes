@@ -31,10 +31,12 @@ class Stream(Generic[X]):
     def send(self, item: Optional[X]) -> None:
         if item is None:
             # We skip None items
+            print("Skipping None item")
             return
 
         if item in self.items:
             # We skip items which are already in the set
+            print(f"{item} is already in {self.items}")
             return
 
         if not isinstance(item, self.object_type):

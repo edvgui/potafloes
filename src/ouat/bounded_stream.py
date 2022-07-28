@@ -27,6 +27,7 @@ class BoundedStream(Stream[X]):
     
     def send(self, item: Optional[X]) -> None:
         if item not in self.items:
+            print(f"New item ({self.count + 1}/{self.max}) in set: {item}")
             self.count += 1
 
         if self.count < self.max:

@@ -91,6 +91,7 @@ double_bind(
 )
 
 async def main() -> Person:
+    print("=== Start ===")
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
     will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
 
@@ -99,7 +100,6 @@ async def main() -> Person:
     marilyn.parents().send(bob)
     marilyn.parents().send(None)
     bob.parents().send(None)
-    bob.parents().send(None)
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
     print(bob == bob_2)
@@ -107,6 +107,7 @@ async def main() -> Person:
     print(bob == await will_be_bob_2)
 
     await TaskManager.gather()
+    print("=== Finish ===")
 
     return bob
 

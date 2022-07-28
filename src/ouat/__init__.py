@@ -61,7 +61,9 @@ def stream(func: Callable[["E"], Type[X]]) -> Callable[["E"], Stream[X]]:
             print(f"Initiating stream for {func.__name__} of {self}")
             cache[(self, func)] = Stream(func(self))
         
-        return cache[(self, func)]
+        s = cache[(self, func)]
+        print(f"Got stream object for {self}.{func.__name__}: {s}")
+        return s
     
     return stream_or_cache
 
@@ -80,7 +82,9 @@ def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["E"], Type[
                 print(f"Initiating stream for {func.__name__} of {self}")
                 cache[(self, func)] = BoundedStream(func(self), min=min, max=max)
             
-            return cache[(self, func)]
+            s = cache[(self, func)]
+            print(f"Got stream object for {self}.{func.__name__}: {s}")
+            return s
         
         return stream_or_cache
 
@@ -169,10 +173,6 @@ class Entity(metaclass=EntityType):
             # For each double binding, each time
             # an item is added to our side of the relation,
             # we should add ourself to the other side
-
-            # TODO This doesn't work yet, the other_side we have here is the
-            # method defined in the class, not the one of the object we actually
-            # want to add our object to.
             other_side: Callable[["E1"], Stream["E"]] = getattr(double_binding, DOUBLE_BIND_MARKER)
             async def add_to_other_side(item: "E1") -> None:
                 print(f"Add {new_instance} to {other_side.__name__} of {item}")
