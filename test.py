@@ -2,14 +2,8 @@ import asyncio
 import functools
 from typing import Any, Awaitable, Optional, Type
 
-from ouat import Entity, bounded_stream, double_bind, index, implementation, output, stream
+from ouat import Entity, bounded_stream, double_bind, index, output, stream
 from ouat.task_manager import TaskManager
-
-async def ok(person: "Person") -> bool:
-    return True
-
-async def has_dog(person: "Person") -> bool:
-    return await person.dog is not None
 
 
 class Dog(Entity):
@@ -26,7 +20,6 @@ class Dog(Entity):
     def unique_name(self) -> str:
         return self.name
 
-    @implementation(condition=ok)
     async def bark(self) -> None:
         print(f"Bark bark {self.owner.name}, bark bark")
 
@@ -34,12 +27,18 @@ class Dog(Entity):
         return f"Dog(name={self.name})"
 
 
+Dog.for_each(call=Dog.bark)
+
+
 class Person(Entity):
     def __init__(self, name: str, likes_dogs: bool) -> None:
         super().__init__()
         self.name = name
         self.likes_dogs = likes_dogs
-        self.dog = output(Optional[Dog])
+
+    @bounded_stream(max=1)
+    def dog(self) -> Type[Dog]:
+        return Dog
 
     @bounded_stream(max=2)
     def parents(self) -> Type["Person"]:
@@ -54,36 +53,37 @@ class Person(Entity):
         return self.name
 
     async def praise_child(self, child: "Person") -> None:
-        print(f"{self.name} says: {child.name} is my child!")
+        print(f"{self.name} says: {child.name} is my child and I am proud of him/her!")
 
-    @implementation(condition=ok)
-    async def handle_children(self) -> None:
-        self.children().subscribe(self.praise_child)
-
-    @implementation(condition=ok)
-    async def handle_parents(self) -> None:
-        parents = await self.parents()
-        print(f"{self.name} says: {parents} are my parents!")
-
-    @implementation(condition=ok)
-    async def print_name(self) -> None:
-        print(self.name)
-
-    @implementation(condition=ok)
-    async def create_dog(self) -> None:
-        if self.likes_dogs:
-            self.dog.set_result(Dog(f"{self.name}'s dog", self))
-        else:
-            self.dog.set_result(None)
-
-    @implementation(condition=has_dog)
     async def walk_dog(self) -> None:
-        dog = await self.dog
+        potential_dog = await self.dog()
+        if not potential_dog:
+            return
+
+        actual_dog = potential_dog.pop()
         print(f"'This is such a wonderful day to walk my dog' says {self.name}")
-        print(f"'An I really like my dog: {dog.name}'")
+        print(f"'An I really like my dog: {actual_dog.name}'")
 
     def __repr__(self) -> str:
         return f"Person(name={self.name})"
+
+async def handle_children(person: Person) -> None:
+    person.children().subscribe(person.praise_child)
+
+async def handle_parents(person: Person) -> None:
+    parents = await person.parents()
+    print(f"{person.name} says: {parents} are my parents!")
+
+async def create_dog(person: Person) -> None:
+    if person.likes_dogs:
+        person.dog().send(Dog(f"{person.name}'s dog", person))
+    else:
+        person.dog().send(None)
+
+Person.for_each(call=create_dog)
+Person.for_each(call=Person.walk_dog)
+Person.for_each(call=handle_children)
+Person.for_each(call=handle_parents)
 
 double_bind(
     Person.children,
@@ -99,6 +99,7 @@ async def main() -> Person:
     marilyn = Person("marilyn", likes_dogs=False)
     marilyn.parents().send(bob)
     marilyn.parents().send(None)
+    bob.parents().send(None)
     bob.parents().send(None)
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
