@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Callable, Coroutine, Generic, List, Optional, Type, TypeVar
+from typing import Any, Callable, Coroutine, Generic, List, Optional, Set, Type, TypeVar
 from ouat.task_manager import TaskManager
 
 
@@ -17,7 +17,7 @@ class Stream(Generic[X]):
     def __init__(self, object_type: Type[X]) -> None:
         self.object_type = object_type
         self.callbacks: List[Callable[[X], Coroutine[Any, Any, None]]] = []
-        self.items: List[X] = []
+        self.items: Set[X] = set()
 
     def subscribe(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> None:
         loop = asyncio.get_running_loop()
@@ -30,6 +30,11 @@ class Stream(Generic[X]):
     
     def send(self, item: Optional[X]) -> None:
         if item is None:
+            # We skip None items
+            return
+
+        if item in self.items:
+            # We skip items which are already in the set
             return
 
         if not isinstance(item, self.object_type):
@@ -37,7 +42,7 @@ class Stream(Generic[X]):
 
         loop = asyncio.get_running_loop()
 
-        self.items.append(item)
+        self.items.add(item)
         for callback in self.callbacks:
             print(f"Calling {callback} on {item} (2)")
             to_be_awaited = callback(item)

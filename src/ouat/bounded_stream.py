@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Awaitable, Generator, Optional, Sequence, Type, TypeVar
+from typing import Any, Awaitable, Generator, Optional, Sequence, Set, Type, TypeVar
 from ouat.task_manager import TaskManager
 from ouat.stream import Stream
 
@@ -21,12 +21,13 @@ class BoundedStream(Stream[X]):
         self.min = min
         self.max = max
         self.count = 0
-        self.completed: Awaitable[Sequence[X]] = asyncio.Future()
+        self.completed: Awaitable[Set[X]] = asyncio.Future()
 
         TaskManager.register(self.completed)
     
     def send(self, item: Optional[X]) -> None:
-        self.count += 1
+        if item not in self.items:
+            self.count += 1
 
         if self.count < self.max:
             # The stream has not been called enough yet
@@ -51,5 +52,5 @@ class BoundedStream(Stream[X]):
 
         self.completed.set_result(self.items)
 
-    def __await__(self) -> Generator[Any, None, Sequence[X]]:
+    def __await__(self) -> Generator[Any, None, Set[X]]:
         return self.completed.__await__()

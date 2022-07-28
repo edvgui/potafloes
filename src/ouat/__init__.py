@@ -8,7 +8,7 @@ from ouat.task_manager import TaskManager
 X = TypeVar("X")
 INDEX_MARKER = "entity_index"
 IMPLEMENTATION_MARKER = "entity_implementation"
-PRODUCT_MARKER = "product_marker"
+DOUBLE_BIND_MARKER = "double_bind"
 
 
 def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
@@ -87,6 +87,14 @@ def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["E"], Type[
     return bounded_stream_input
 
 
+def double_bind(
+    a: Callable[["E"], Stream["E1"]],
+    b: Callable[["E1"], Stream["E"]],
+) -> None:
+    setattr(a, DOUBLE_BIND_MARKER, b)
+    setattr(b, DOUBLE_BIND_MARKER, a)
+
+
 def output(__type: Type[X]) -> Awaitable[X]:
     return asyncio.Future()
 
@@ -98,7 +106,7 @@ class EntityType(type):
         if cls in cls._entities:
             return cls.__new__(cls, *args, **kwds)
 
-        indices, implementations = [], []
+        indices, implementations, dbbs = [], [], []
         for _, method in cls.__dict__.items():
             if hasattr(method, INDEX_MARKER):
                 # This is an index, we should register it
@@ -110,8 +118,14 @@ class EntityType(type):
                 implementations.append(method)
                 continue
 
+            if hasattr(method, DOUBLE_BIND_MARKER):
+                # This is a double bind stream
+                dbbs.append(method)
+                continue
+
         cls.register_indices(indices)
         cls.register_implementations(implementations)
+        cls.register_double_bindings(dbbs)
         cls._entities.add(cls)
         
         return cls.__new__(cls, *args, **kwds)
@@ -121,6 +135,7 @@ class Entity(metaclass=EntityType):
 
     __indices: Sequence[Callable[["E"], X]]
     __implementations: Sequence[Callable[["E"], Coroutine[Any, Any, None]]]
+    __double_bindings: Sequence[Callable[["E"], Stream["E1"]]]
 
     __queries: Optional[Dict[Tuple[Callable[["E"], X], X], asyncio.Future]] = None
     __instances: Optional[Set["E"]] = None
@@ -150,6 +165,21 @@ class Entity(metaclass=EntityType):
             to_be_awaited = implementation(new_instance)
             TaskManager.register(loop.create_task(to_be_awaited))
 
+        for double_binding in cls.__double_bindings:
+            # For each double binding, each time
+            # an item is added to our side of the relation,
+            # we should add ourself to the other side
+
+            # TODO This doesn't work yet, the other_side we have here is the
+            # method defined in the class, not the one of the object we actually
+            # want to add our object to.
+            other_side: Callable[["E1"], Stream["E"]] = getattr(double_binding, DOUBLE_BIND_MARKER)
+            async def add_to_other_side(item: "E1") -> None:
+                print(f"Add {new_instance} to {other_side.__name__} of {item}")
+                other_side(item).send(new_instance)
+
+            double_binding(new_instance).subscribe(add_to_other_side)
+
         return new_instance
 
     def __setattr__(self, __name: str, __value: Any) -> None:
@@ -171,6 +201,10 @@ class Entity(metaclass=EntityType):
     @classmethod
     def register_implementations(cls: Type["E"], implementations: Sequence[Callable[["E"], Coroutine[Any, Any, None]]]) -> None:
         cls.__implementations = implementations
+
+    @classmethod
+    def register_double_bindings(cls: Type["E"], dbbs: Sequence[Callable[["E"], Stream["E1"]]]) -> None:
+        cls.__double_bindings = dbbs
 
     @classmethod
     def queries(cls: Type["E"]) -> Dict[Tuple[Callable[["E"], X], X], asyncio.Future]:
@@ -207,3 +241,4 @@ class Entity(metaclass=EntityType):
         return await cls.queries()[query]
 
 E = TypeVar("E", bound=Entity)
+E1 = TypeVar("E1", bound=Entity)

@@ -2,7 +2,7 @@ import asyncio
 import functools
 from typing import Any, Awaitable, Optional, Type
 
-from ouat import Entity, bounded_stream, index, implementation, output, stream
+from ouat import Entity, bounded_stream, double_bind, index, implementation, output, stream
 from ouat.task_manager import TaskManager
 
 async def ok(person: "Person") -> bool:
@@ -85,6 +85,11 @@ class Person(Entity):
     def __repr__(self) -> str:
         return f"Person(name={self.name})"
 
+double_bind(
+    Person.children,
+    Person.parents,
+)
+
 async def main() -> Person:
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
     will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
@@ -93,7 +98,6 @@ async def main() -> Person:
     marilyn = Person("marilyn", likes_dogs=False)
     marilyn.parents().send(bob)
     marilyn.parents().send(None)
-    bob.children().send(marilyn)
     bob.parents().send(None)
     bob.parents().send(None)
 
