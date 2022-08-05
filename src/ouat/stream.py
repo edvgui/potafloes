@@ -3,6 +3,7 @@ from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
                     Type, TypeVar)
 
 from ouat.context import Context
+from ouat.exceptions import StreamItemTypeException
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -76,9 +77,7 @@ class Stream(Generic[X]):
             return
 
         if not isinstance(item, self._object_type):
-            raise ValueError(
-                f"{item} should be of type {self._object_type} but isn't ({type(item)})"
-            )
+            raise StreamItemTypeException(self, item)
 
         self._items.add(item)
         for callback in self._callbacks:

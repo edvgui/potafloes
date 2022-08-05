@@ -2,6 +2,8 @@ import asyncio
 from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
                     TypeVar)
 
+from ouat.exceptions import (BoundedStreamOverflowException,
+                             IncompleteBoundedStreamException)
 from ouat.stream import Stream
 
 X = TypeVar("X")
@@ -63,9 +65,7 @@ class BoundedStream(Stream[X]):
 
         if self._count > self._max:
             # The stream is already full
-            raise RuntimeError(
-                "The stream is already complete, no other element can be added to it"
-            )
+            raise BoundedStreamOverflowException(self, item)
 
         # Add the last item in the stream
         super().send(item)
@@ -73,10 +73,7 @@ class BoundedStream(Stream[X]):
         if len(self._items) < self._min:
             # The stream is supposed to be complete but doesn't have
             # enough elements
-            raise RuntimeError(
-                f"The stream is complete but doesn't have enough elements: {len(self._items)} < {self.min} "
-                f"({self._items})"
-            )
+            raise IncompleteBoundedStreamException(self)
 
         self._completed.set_result(self._items)
 
