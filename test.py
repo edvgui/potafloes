@@ -1,16 +1,15 @@
 import asyncio
+from dataclasses import dataclass
 import functools
 from typing import Any, Awaitable, Optional, Type
 
-from ouat import Entity, bounded_stream, double_bind, index, output, stream
+from ouat import Entity, bounded_stream, double_bind, index, stream
 from ouat.task_manager import TaskManager
 
 
 class Dog(Entity):
-    def __init__(self, name: str, owner: "Person") -> None:
-        super().__init__()
-        self.name = name
-        self.owner = owner
+    name: str
+    owner: str
 
     @index
     def unique_owner(self) -> "Person":
@@ -31,10 +30,8 @@ Dog.for_each(call=Dog.bark)
 
 
 class Person(Entity):
-    def __init__(self, name: str, likes_dogs: bool) -> None:
-        super().__init__()
-        self.name = name
-        self.likes_dogs = likes_dogs
+    name: str
+    likes_dogs: bool
 
     @bounded_stream(max=1)
     def dog(self) -> Type[Dog]:
@@ -76,7 +73,7 @@ async def handle_parents(person: Person) -> None:
 
 async def create_dog(person: Person) -> None:
     if person.likes_dogs:
-        person.dog().send(Dog(f"{person.name}'s dog", person))
+        person.dog().send(Dog(name=f"{person.name}'s dog", owner=person))
     else:
         person.dog().send(None)
 
@@ -95,8 +92,8 @@ async def main() -> Person:
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
     will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
 
-    bob = Person("bob", likes_dogs=True)
-    marilyn = Person("marilyn", likes_dogs=False)
+    bob = Person(name="bob", likes_dogs=True)
+    marilyn = Person(name="marilyn", likes_dogs=False)
     marilyn.parents().send(bob)
     marilyn.parents().send(None)
     bob.parents().send(None)
@@ -113,5 +110,5 @@ async def main() -> Person:
     return bob
 
 bob = asyncio.run(main())
-print(bob.children().items)
-print(bob.children().callbacks)
+print(bob.children()._items)
+print(bob.children()._callbacks)

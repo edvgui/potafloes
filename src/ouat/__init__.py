@@ -1,7 +1,9 @@
 import asyncio
+from dataclasses import KW_ONLY, dataclass
+import functools
 from typing import Any, Awaitable, Callable, Coroutine, Dict, Generator, List, Optional, Sequence, Set, Tuple, Type, TypeVar
-from ouat.bounded_stream import BoundedStream
-from ouat.stream import Stream
+from ouat.bounded_stream import BoundedStream, bounded_stream
+from ouat.stream import Stream, stream
 from ouat.task_manager import TaskManager
 
 
@@ -32,62 +34,24 @@ def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     return index_or_cache
 
 
-def stream(func: Callable[["E"], Type[X]]) -> Callable[["E"], Stream[X]]:
-    """
-    Mark the current method as a stream, on which will be added and potentially
-    subscribed items
-    """
-    cache: Dict[Tuple["E", Callable[["E"], Type[X]]], Stream[X]] = dict()
-
-    def stream_or_cache(self) -> Stream[X]:
-        if (self, func) not in cache:
-            # print(f"Initiating stream for {func.__name__} of {self}")
-            cache[(self, func)] = Stream(func(self))
-        
-        s = cache[(self, func)]
-        # print(f"Got stream object for {self}.{func.__name__}: {s}")
-        return s
-    
-    return stream_or_cache
-
-
-def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["E"], Type[X]]], Callable[["E"], BoundedStream[X]]]:
-
-    def bounded_stream_input(func: Callable[["E"], Type[X]]) -> Callable[["E"], BoundedStream[X]]:
-        """
-        Mark the current method as a stream, on which will be added and potentially
-        subscribed items
-        """
-        cache: Dict[Tuple["E", Callable[["E"], Type[X]]], BoundedStream[X]] = dict()
-
-        def stream_or_cache(self) -> BoundedStream[X]:
-            if (self, func) not in cache:
-                # print(f"Initiating stream for {func.__name__} of {self}")
-                cache[(self, func)] = BoundedStream(func(self), min=min, max=max)
-            
-            s = cache[(self, func)]
-            # print(f"Got stream object for {self}.{func.__name__}: {s}")
-            return s
-        
-        return stream_or_cache
-
-    return bounded_stream_input
-
-
 def double_bind(
     a: Callable[["E"], Stream["E1"]],
     b: Callable[["E1"], Stream["E"]],
 ) -> None:
-    setattr(a, DOUBLE_BIND_MARKER, b)
-    setattr(b, DOUBLE_BIND_MARKER, a)
+    setattr(a, DOUBLE_BIND_MARKER, (a.__name__, b.__name__))
+    setattr(b, DOUBLE_BIND_MARKER, (b.__name__, a.__name__))
 
 
 class EntityType(type):
     _entities: Set[Type["E"]] = set()
 
-    def __call__(cls: Type["E"], *args: Any, **kwds: Any) -> Any:
+    def __call__(cls: Type["E"], **kwds: Any) -> Any:
         if cls in cls._entities:
-            return cls.__new__(cls, *args, **kwds)
+            return cls.__new__(cls, **kwds)
+
+        # All entities are frozen dataclasses, the only attributes
+        # who can be modified are the streams
+        dataclass(cls, frozen=True, kw_only=True)
 
         indices, dbbs = [], []
         for _, method in cls.__dict__.items():
@@ -104,8 +68,8 @@ class EntityType(type):
         cls.register_indices(indices)
         cls.register_double_bindings(dbbs)
         cls._entities.add(cls)
-        
-        return cls.__new__(cls, *args, **kwds)
+
+        return cls.__new__(cls, **kwds)
 
 
 class Entity(metaclass=EntityType):
@@ -117,14 +81,17 @@ class Entity(metaclass=EntityType):
     __instances: Optional[Set["E"]] = None
     __implementations: Optional[List[Callable[["Entity"], Coroutine[Any, Any, None]]]] = None
 
-    def __new__(cls: type["E"], *args, **kwargs) -> "E":
+    def __new__(cls: type["E"], **kwargs) -> "E":
         new_instance = object.__new__(cls)
-        new_instance.__init__(*args, **kwargs)
+        new_instance.__init__(**kwargs)
         for instance in cls.__instances or set():
             for indice in cls.__indices:
                 if indice(new_instance) == indice(instance):
+                    for key, value in kwargs.items():
+                        # Double set exception
+                        assert getattr(instance, key) == value, f"{instance}.{key} != {value}"
                     return instance
-        
+
         resolved: List[Tuple[Callable[["E"], X], X]] = []
         for (index, arg), future in cls.queries():
             if index(new_instance) == arg:
@@ -134,18 +101,32 @@ class Entity(metaclass=EntityType):
         for res in resolved:
             cls.queries().pop(res)
 
-        cls.__emit__(instance=new_instance)
+        loop = asyncio.get_running_loop()
+
+        for callback in cls.__implementations or []:
+            to_be_awaited = callback(new_instance)
+            TaskManager.register(loop.create_task(to_be_awaited))
+
+        if cls.__instances is None:
+            cls.__instances = set()
+        cls.__instances.add(new_instance)
 
         for double_binding in cls.__double_bindings:
             # For each double binding, each time
             # an item is added to our side of the relation,
             # we should add ourself to the other side
-            other_side: Callable[["E1"], Stream["E"]] = getattr(double_binding, DOUBLE_BIND_MARKER)
-            async def add_to_other_side(item: "E1") -> None:
-                print(f"Add {new_instance} to {other_side.__name__} of {item}")
-                other_side(item).send(new_instance)
+            this_side_stream, other_side_stream = getattr(double_binding, DOUBLE_BIND_MARKER)
+            async def add_to_other_side(item: "E1", *, other_side_stream: str) -> None:
+                other_side = getattr(item, other_side_stream)
+                print(f"Received {item} in {new_instance}.{this_side_stream}, adding {new_instance} to {item}.{other_side_stream}")
+                other_side().send(new_instance)
 
-            double_binding(new_instance).subscribe(add_to_other_side)
+            this_side = getattr(new_instance, this_side_stream)
+            this_side().subscribe(functools.partial(add_to_other_side, other_side_stream=other_side_stream))
+            print(
+                f"When and object is added to {new_instance}.{this_side_stream}, "
+                f"self will be added to the object.{other_side_stream}"
+            )
 
         return new_instance
 
@@ -174,18 +155,6 @@ class Entity(metaclass=EntityType):
         if cls.__queries is None:
             cls.__queries = dict()
         return cls.__queries
-
-    @classmethod
-    def __emit__(cls: Type["E"], *, instance: "E") -> None:
-        loop = asyncio.get_running_loop()
-
-        for callback in cls.__implementations or []:
-            to_be_awaited = callback(instance)
-            TaskManager.register(loop.create_task(to_be_awaited))
-
-        if cls.__instances is None:
-            cls.__instances = set()
-        cls.__instances.add(instance)
 
     @classmethod
     async def get(cls: Type["E"], *, index=Callable[[Type["E"]], X], arg=X) -> "E":
