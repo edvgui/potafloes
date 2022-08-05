@@ -1,7 +1,8 @@
-import asyncio
-from typing import Any, Callable, Coroutine, Generic, List, Optional, Set, Type, TypeVar
-from ouat.task_manager import TaskManager
+import logging
+from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
+                    Type, TypeVar)
 
+from ouat.context import Context
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -16,6 +17,12 @@ class Stream(Generic[X]):
     """
 
     def __init__(self, bearer: Y, placeholder: str, object_type: Type[X]) -> None:
+        """
+        :param bearer: The object this stream is attached to.
+        :param placeholder: The name of the object function this stream is a placeholder for.
+        :param object_type: The type of objects to expect in the stream.  Objects introduced
+            in the stream are expected to be a subclass of this type.
+        """
         self._bearer = bearer
         self._placeholder = placeholder
         self._object_type = object_type
@@ -23,38 +30,59 @@ class Stream(Generic[X]):
         self._callbacks: List[Callable[[X], Coroutine[Any, Any, None]]] = []
         self._items: Set[X] = set()
 
-    def subscribe(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> None:
-        loop = asyncio.get_running_loop()
+        self._context = Context.get()
+        self._logger = logging.getLogger(
+            f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
+        )
 
+    def _emit_task(
+        self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X
+    ) -> str:
+        """
+        Helper method to create a new task, which takes a coroutine and feeds
+        it the item provided in parameter.
+        """
+        name = f"{callback}({item})@{self._bearer}.{self._placeholder}"
+        self._logger.debug("Starting new task: %s", name)
+        to_be_awaited = callback(item)
+        self._context.register(
+            self._context.event_loop().create_task(
+                to_be_awaited,
+                name=name,
+            )
+        )
+
+    def subscribe(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> None:
+        """
+        Subscribe to each item emitted in this stream.  The callback should be a coroutine
+        and will be called exactly once for each item in the stream.
+        """
         self._callbacks.append(callback)
         for item in self._items:
-            print(f"Calling {callback} on {item} (1)")
-            to_be_awaited = callback(item)
-            TaskManager.register(loop.create_task(to_be_awaited))
-    
+            self._emit_task(callback, item)
+
     def send(self, item: Optional[X]) -> None:
+        """
+        Send a new item in the stream.  All registered callback will be called with
+        this item in argument, unless this item has already been sent or the item
+        is None.
+        """
         if item is None:
             # We skip None items
-            print("Skipping None item")
             return
 
         if item in self._items:
             # We skip items which are already in the set
-            print(f"{item} is already in {self._items}")
             return
 
         if not isinstance(item, self._object_type):
-            raise ValueError(f"{item} should be of type {self._object_type} but isn't ({type(item)})")
-
-        print(f"Adding {item} ({self._object_type}) to {self._bearer}.{self._placeholder}")
-
-        loop = asyncio.get_running_loop()
+            raise ValueError(
+                f"{item} should be of type {self._object_type} but isn't ({type(item)})"
+            )
 
         self._items.add(item)
         for callback in self._callbacks:
-            print(f"Calling {callback} on {item} (2)")
-            to_be_awaited = callback(item)
-            TaskManager.register(loop.create_task(to_be_awaited))
+            self._emit_task(callback, item)
 
 
 def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:
@@ -72,11 +100,13 @@ def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:
         if not hasattr(self, response_attribute):
             # We set the attribute using the object __setattr__ method as our object
             # is frozen, normal setattr doesn't work
-            object.__setattr__(self, response_attribute, Stream(self, stream_name, func(self)))
+            object.__setattr__(
+                self, response_attribute, Stream(self, stream_name, func(self))
+            )
 
         existing_stream = getattr(self, response_attribute)
         return existing_stream
 
     stream_or_cache.__name__ = stream_name
-    
+
     return stream_or_cache

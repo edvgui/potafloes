@@ -1,10 +1,9 @@
 import asyncio
-from dataclasses import dataclass
-import functools
-from typing import Any, Awaitable, Optional, Type
+from typing import Type
 
-from ouat import Entity, bounded_stream, double_bind, index, stream
-from ouat.task_manager import TaskManager
+from ouat import bounded_stream, stream
+from ouat.context import Context
+from ouat.entity import Entity, double_bind, index
 
 
 class Dog(Entity):
@@ -33,15 +32,15 @@ class Person(Entity):
     name: str
     likes_dogs: bool
 
-    @bounded_stream(max=1)
+    @bounded_stream.bounded_stream(max=1)
     def dog(self) -> Type[Dog]:
         return Dog
 
-    @bounded_stream(max=2)
+    @bounded_stream.bounded_stream(max=2)
     def parents(self) -> Type["Person"]:
         return Person
 
-    @stream
+    @stream.stream
     def children(self) -> Type["Person"]:
         return Person
 
@@ -64,18 +63,22 @@ class Person(Entity):
     def __repr__(self) -> str:
         return f"Person(name={self.name})"
 
+
 async def handle_children(person: Person) -> None:
     person.children().subscribe(person.praise_child)
+
 
 async def handle_parents(person: Person) -> None:
     parents = await person.parents()
     print(f"{person.name} says: {parents} are my parents!")
+
 
 async def create_dog(person: Person) -> None:
     if person.likes_dogs:
         person.dog().send(Dog(name=f"{person.name}'s dog", owner=person))
     else:
         person.dog().send(None)
+
 
 Person.for_each(call=create_dog)
 Person.for_each(call=Person.walk_dog)
@@ -87,7 +90,10 @@ double_bind(
     Person.parents,
 )
 
+
 async def main() -> Person:
+    context = Context.get(create_ok=True)
+
     print("=== Start ===")
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
     will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
@@ -104,10 +110,11 @@ async def main() -> Person:
     print(bob == await will_be_bob)
     print(bob == await will_be_bob_2)
 
-    await TaskManager.gather()
+    await context.gather()
     print("=== Finish ===")
 
     return bob
+
 
 bob = asyncio.run(main())
 print(bob.children()._items)

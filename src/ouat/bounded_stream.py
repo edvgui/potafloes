@@ -1,16 +1,33 @@
 import asyncio
-from typing import Any, Awaitable, Callable, Generator, Optional, Sequence, Set, Type, TypeVar
-from ouat.task_manager import TaskManager
-from ouat.stream import Stream
+from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
+                    TypeVar)
 
+from ouat.stream import Stream
 
 X = TypeVar("X")
 Y = TypeVar("Y")
 
 
 class BoundedStream(Stream[X]):
+    """
+    A bounded stream object can be used to register callbacks, that will be called for
+    each item that is sent into the stream.
+    In addition to its superclass, this one has a notion of completion and upper bound.
+    For a bounded stream to be considered complete, at least `min` elements and not more
+    than `max` need to be to the stream.  Every time a None element is added, we keep it
+    out of the stream be increase the counter.  We stop increasing the counter once we
+    reach `max`, and check the stream size constraints then.
+    """
 
-    def __init__(self, bearer: Y, placeholder: str, object_type: Type[X], *, min: int = 0, max: int) -> None:
+    def __init__(
+        self,
+        bearer: Y,
+        placeholder: str,
+        object_type: Type[X],
+        *,
+        min: int = 0,
+        max: int,
+    ) -> None:
         super().__init__(bearer, placeholder, object_type)
 
         if min < 0:
@@ -19,22 +36,32 @@ class BoundedStream(Stream[X]):
         if max < min:
             raise ValueError(f"Invalid upper bound: {max} < {min}")
 
-        self.min = min
-        self.max = max
-        self.count = 0
-        self.completed: Awaitable[Set[X]] = asyncio.Future()
+        self._min = min
+        self._max = max
+        self._count = 0
+        self._completed: Awaitable[Set[X]] = asyncio.Future(
+            loop=self._context.event_loop()
+        )
 
-        TaskManager.register(self.completed)
-    
+        self._context.register(self._completed)
+
     def send(self, item: Optional[X]) -> None:
+        """
+        Similarly to its superclass, send an element in the stream.  We additionally check
+        here that the size of the stream is within the constraints (> min, < max).  Once the
+        stream is completed, we complete the inner task, the bounded stream can be awaited
+        and will return the full set of values.
+        """
         if item not in self._items:
-            self.count += 1
+            # We increment the counter for each element we see that is not
+            # yet in the stream, even if it is None
+            self._count += 1
 
-        if self.count < self.max:
+        if self._count < self._max:
             # The stream has not been called enough yet
             return super().send(item)
 
-        if self.count > self.max:
+        if self._count > self._max:
             # The stream is already full
             raise RuntimeError(
                 "The stream is already complete, no other element can be added to it"
@@ -43,7 +70,7 @@ class BoundedStream(Stream[X]):
         # Add the last item in the stream
         super().send(item)
 
-        if len(self._items) < self.min:
+        if len(self._items) < self._min:
             # The stream is supposed to be complete but doesn't have
             # enough elements
             raise RuntimeError(
@@ -51,19 +78,23 @@ class BoundedStream(Stream[X]):
                 f"({self._items})"
             )
 
-        self.completed.set_result(self._items)
+        self._completed.set_result(self._items)
 
     def __await__(self) -> Generator[Any, None, Set[X]]:
-        return self.completed.__await__()
+        return self._completed.__await__()
 
 
-def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["Y"], Type[X]]], Callable[["Y"], BoundedStream[X]]]:
+def bounded_stream(
+    *, min: int = 0, max: int
+) -> Callable[[Callable[["Y"], Type[X]]], Callable[["Y"], BoundedStream[X]]]:
+    """
+    Mark the current method as a bounded stream, on which will be added and potentially
+    subscribed items.  This stream has a minimum and maximum size.
+    """
 
-    def bounded_stream_input(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], BoundedStream[X]]:
-        """
-        Mark the current method as a stream, on which will be added and potentially
-        subscribed items
-        """
+    def bounded_stream_input(
+        func: Callable[["Y"], Type[X]]
+    ) -> Callable[["Y"], BoundedStream[X]]:
 
         # This is the name of the function wearing the decorator
         stream_name = func.__name__
@@ -75,7 +106,11 @@ def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["Y"], Type[
             if not hasattr(self, response_attribute):
                 # We set the attribute using the object __setattr__ method as our object
                 # is frozen, normal setattr doesn't work
-                object.__setattr__(self, response_attribute, BoundedStream(self, stream_name, func(self), min=min, max=max))
+                object.__setattr__(
+                    self,
+                    response_attribute,
+                    BoundedStream(self, stream_name, func(self), min=min, max=max),
+                )
 
             existing_stream = getattr(self, response_attribute)
             assert isinstance(existing_stream, BoundedStream), type(existing_stream)
