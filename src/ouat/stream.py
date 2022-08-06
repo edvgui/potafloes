@@ -9,6 +9,9 @@ X = TypeVar("X")
 Y = TypeVar("Y")
 
 
+STREAM_MARKER = "entity_stream"
+
+
 class Stream(Generic[X]):
     """
     A stream object can be used to register callbacks, that will be called for
@@ -107,5 +110,6 @@ def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:
         return existing_stream
 
     stream_or_cache.__name__ = stream_name
+    setattr(stream_or_cache, STREAM_MARKER, True)
 
     return stream_or_cache

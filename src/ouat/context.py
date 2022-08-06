@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from asyncio import Future
-from typing import List, Optional
+from types import TracebackType
+from typing import List, Optional, Type
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,9 +26,11 @@ class Context:
 
     __context: Optional["Context"] = None
 
-    def __init__(self) -> None:
+    def __init__(
+        self, *, event_loop: Optional[asyncio.AbstractEventLoop] = None
+    ) -> None:
         self.tasks: List[asyncio.Task] = []
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = event_loop
 
     def event_loop(
         self, *, loop: Optional[asyncio.AbstractEventLoop] = None
@@ -47,6 +50,36 @@ class Context:
 
     def gather(self) -> Future:
         return asyncio.gather(*self.tasks, return_exceptions=False)
+
+    async def __aenter__(self) -> "Context":
+        from ouat.entity import EntityDomain, EntityType
+
+        for entity_type in EntityType._entities:
+            entity_domain = EntityDomain.get(entity_type=entity_type)
+            entity_domain.freeze()
+
+        return self
+
+    async def __aexit__(
+        self, exc_t: Type[Exception], exc_v: Exception, exc_tb: TracebackType
+    ) -> None:
+        await self.gather()
+        Context.clean()
+
+    @classmethod
+    def clean(cls) -> None:
+        """
+        Get all the instances of all the entities it can find, and delete them.
+        """
+        from ouat.entity import EntityContext, EntityType
+
+        for entity in EntityType._entities:
+            entity_context = EntityContext.get(
+                entity_type=entity, context=cls.__context
+            )
+            entity_context.reset()
+
+        cls.__context = None
 
     @classmethod
     def get(cls, *, create_ok: bool = False) -> "Context":

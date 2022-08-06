@@ -4,7 +4,7 @@ from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
 
 from ouat.exceptions import (BoundedStreamOverflowException,
                              IncompleteBoundedStreamException)
-from ouat.stream import Stream
+from ouat.stream import STREAM_MARKER, Stream
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -114,6 +114,7 @@ def bounded_stream(
             return existing_stream
 
         stream_or_cache.__name__ = stream_name
+        setattr(stream_or_cache, STREAM_MARKER, True)
 
         return stream_or_cache
 

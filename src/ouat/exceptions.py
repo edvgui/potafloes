@@ -15,6 +15,20 @@ class OuatException(RuntimeError):
     """
 
 
+class ContextModifiedAfterFreezeException(BaseException):
+    """
+    Exception raised when an attempt is made to modify an entity context
+    object after it has been frozen.
+    """
+
+
+class DomainModifiedAfterFreezeException(BaseException):
+    """
+    Exception raised when an attempt is made to modify an entity domain
+    object after it has been frozen.
+    """
+
+
 class DoubleSetException(BaseException):
     """
     Exception raised when an entity is created twice with
