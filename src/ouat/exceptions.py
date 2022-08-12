@@ -15,6 +15,20 @@ class OuatException(RuntimeError):
     """
 
 
+class ContextAlreadyInitializedException(BaseException):
+    """
+    Exception raised when an attempts is made to initialize an already
+    initialized context
+    """
+
+
+class ContextAlreadyFrozenException(BaseException):
+    """
+    Exception raised when an attempts is made to freeze an already
+    frozen context
+    """
+
+
 class ContextModifiedAfterFreezeException(BaseException):
     """
     Exception raised when an attempt is made to modify an entity context

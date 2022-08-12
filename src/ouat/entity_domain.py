@@ -3,7 +3,6 @@ from typing import (Any, Callable, Coroutine, Dict, Generic, List, Sequence,
                     Type, TypeVar)
 
 from ouat.exceptions import DomainModifiedAfterFreezeException
-from ouat.stream import Stream
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -76,7 +75,7 @@ class EntityDomain(Generic[X]):
         self._implementations.append(implementation)
 
     def freeze(self) -> None:
-        self.logger.info("Freezing context")
+        self.logger.info("Freezing domain")
         self._frozen = True
 
     @classmethod

@@ -1,14 +1,12 @@
+import inspect
 import logging
 from dataclasses import dataclass
-from typing import (Any, Callable, Coroutine, Dict,
-                    Set, Tuple,
-                    Type, TypeVar)
+from typing import Any, Callable, Coroutine, Dict, Set, Tuple, Type, TypeVar
 
 from ouat.context import Context
 from ouat.entity_context import EntityContext
 from ouat.entity_domain import EntityDomain
-from ouat.exceptions import (
-                             DoubleSetException)
+from ouat.exceptions import DoubleSetException
 from ouat.stream import STREAM_MARKER, Stream
 
 X = TypeVar("X")
@@ -99,7 +97,7 @@ class EntityType(type):
 
     def __call__(self: Type["E"], **kwds: Any) -> Any:
         return super().__call__(
-            **kwds, _context=Context.get(), _logger=logging.getLogger(__name__)
+            **kwds, _context=Context(), _logger=logging.getLogger(__name__)
         )
 
 
@@ -159,16 +157,22 @@ class Entity(metaclass=EntityType):
         # For all the implementations that have been registered, we create a task
         # calling them and passing the current object
         for callback in entity_domain.implementations:
-            new_instance._emit_task(callback)
+            new_instance._trigger_implementation(callback)
 
         return new_instance
 
-    def _emit_task(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> str:
+    def _trigger_implementation(
+        self, callback: Callable[[X], Coroutine[Any, Any, None]]
+    ) -> str:
         name = f"{callback}({self})"
-        self._logger.debug("Starting new task: %s", name)
+        self._logger.debug(
+            "Trigger implementation %s (%s)",
+            callback.__name__,
+            inspect.getmodule(callback),
+        )
         to_be_awaited = callback(self)
         self._context.register(
-            self._context.event_loop().create_task(
+            self._context.event_loop.create_task(
                 to_be_awaited,
                 name=name,
             )

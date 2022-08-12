@@ -42,7 +42,7 @@ class BoundedStream(Stream[X]):
         self._max = max
         self._count = 0
         self._completed: Awaitable[Set[X]] = asyncio.Future(
-            loop=self._context.event_loop()
+            loop=self._context.event_loop
         )
 
         self._context.register(self._completed)

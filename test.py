@@ -1,10 +1,10 @@
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
+import logging
 from typing import Type
 
 from ouat import bounded_stream, stream
 from ouat.context import Context
-from ouat.entity import Entity, double_bind, index, implementation
+from ouat.entity import Entity, double_bind, implementation, index
 
 
 class Dog(Entity):
@@ -90,34 +90,27 @@ implementation(Person)(Person.walk_dog)
 double_bind(Person.children, Person.parents)
 
 
-async def main() -> Person:
-
-    print("=== Start ===")
-
-    async with Context.get(create_ok=True):
-
-        will_be_bob = Person.get(index=Person.unique_name, arg="bob")
-        will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
-
-        bob = Person(name="bob", likes_dogs=True)
-        marilyn = Person(name="marilyn", likes_dogs=False)
-        marilyn.parents().send(bob)
-        marilyn.parents().send(None)
-        bob.parents().send(None)
-        bob.parents().send(None)
-
-        bob_2 = await Person.get(index=Person.unique_name, arg="bob")
-        print(bob == bob_2)
-        print(bob == await will_be_bob)
-        print(bob == await will_be_bob_2)
-
-    print("=== Finish ===")
-
-    return bob
+logging.basicConfig(level=logging.DEBUG)
 
 
-bob = asyncio.run(main())
-print(bob.children()._items)
-print(bob.children()._callbacks)
+async def main() -> None:
+
+    will_be_bob = Person.get(index=Person.unique_name, arg="bob")
+    will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
+
+    bob = Person(name="bob", likes_dogs=True)
+    marilyn = Person(name="marilyn", likes_dogs=False)
+    marilyn.parents().send(bob)
+    marilyn.parents().send(None)
+    bob.parents().send(None)
+    bob.parents().send(None)
+
+    bob_2 = await Person.get(index=Person.unique_name, arg="bob")
+    print(bob == bob_2)
+    print(bob == await will_be_bob)
+    print(bob == await will_be_bob_2)
 
 
+Context().run(main)
+Context().reset()
+Context().run(main)

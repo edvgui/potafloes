@@ -34,7 +34,7 @@ class Stream(Generic[X]):
         self._callbacks: List[Callable[[X], Coroutine[Any, Any, None]]] = []
         self._items: Set[X] = set()
 
-        self._context = Context.get()
+        self._context = Context()
         self._logger = logging.getLogger(
             f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
         )
@@ -50,7 +50,7 @@ class Stream(Generic[X]):
         self._logger.debug("Starting new task: %s", name)
         to_be_awaited = callback(item)
         self._context.register(
-            self._context.event_loop().create_task(
+            self._context.event_loop.create_task(
                 to_be_awaited,
                 name=name,
             )

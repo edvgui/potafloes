@@ -106,7 +106,7 @@ class EntityContext(Generic[X]):
                 self.logger.debug(
                     "Instance %s is a match for %s=%s",
                     str(instance),
-                    str(query),
+                    str(query.__name__),
                     str(result),
                 )
                 return instance
@@ -141,14 +141,13 @@ class EntityContext(Generic[X]):
         *,
         entity_type: Type[X],
         context: Optional[Context] = None,
-        create_ok: bool = False,
     ) -> "EntityContext[X]":
         """
         Get the context instance for this entity_type and this base context.
         If none exists yet, and create_ok is True, then a new one is created.
         """
         if context is None:
-            context = Context.get(create_ok=create_ok)
+            context = Context()
 
         identifier = (entity_type, context)
         if identifier in cls.__entity_contexts:

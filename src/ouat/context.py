@@ -1,17 +1,13 @@
 import asyncio
 import logging
+import threading
 from asyncio import Future
-from types import TracebackType
-from typing import List, Optional, Type
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Type
+
+from ouat.exceptions import (ContextAlreadyFrozenException,
+                             ContextAlreadyInitializedException)
 
 LOGGER = logging.getLogger(__name__)
-
-
-class ContextNotReadyError(RuntimeError):
-    """
-    This exception is raised when Context.get() is called before
-    the context is actually created.
-    """
 
 
 class Context:
@@ -24,72 +20,116 @@ class Context:
     should not be exposed directly to the end user.
     """
 
-    __context: Optional["Context"] = None
+    __contexts: Dict[str, "Context"] = {}
 
-    def __init__(
-        self, *, event_loop: Optional[asyncio.AbstractEventLoop] = None
-    ) -> None:
+    def __new__(cls: Type["Context"]) -> "Context":
+        new_instance = object.__new__(cls)
+        new_instance.__init__()
+
+        new_instance.logger.name = str(new_instance)
+
+        if new_instance.name not in cls.__contexts:
+            cls.__contexts[new_instance.name] = new_instance
+            new_instance.logger.debug("New context created")
+
+        return cls.__contexts[new_instance.name]
+
+    def __init__(self) -> None:
+        self.name = threading.current_thread().name
         self.tasks: List[asyncio.Task] = []
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = event_loop
 
-    def event_loop(
-        self, *, loop: Optional[asyncio.AbstractEventLoop] = None
-    ) -> asyncio.AbstractEventLoop:
-        if self._event_loop is not None:
-            return self._event_loop
+        self._initialized: bool = False
+        self._frozen: bool = False
+        self._finalizer: Optional[Future] = None
 
-        if loop is None:
-            LOGGER.warning("No event loop provided, using the default one")
-            loop = asyncio.get_running_loop()
+        self.logger = logging.getLogger(__name__)
 
-        self._event_loop = loop
-        return self._event_loop
+    @property
+    def initalized(self) -> bool:
+        return self._initialized
+
+    @property
+    def frozen(self) -> bool:
+        return self._frozen
+
+    @property
+    def event_loop(self) -> asyncio.AbstractEventLoop:
+        return asyncio.get_running_loop()
 
     def register(self, task: asyncio.Task) -> None:
         self.tasks.append(task)
 
-    def gather(self) -> Future:
-        return asyncio.gather(*self.tasks, return_exceptions=False)
+    def init(self) -> None:
+        # First, we make sure that the context is not already initialized
+        if self.initalized:
+            raise ContextAlreadyInitializedException(
+                "This context is already initialized"
+            )
 
-    async def __aenter__(self) -> "Context":
+        self._initialized = True
+
+        # Then, we make sure that the domain is frozen
         from ouat.entity import EntityDomain, EntityType
 
         for entity_type in EntityType._entities:
             entity_domain = EntityDomain.get(entity_type=entity_type)
             entity_domain.freeze()
 
-        return self
+        # Finally, we setup the exception handler for our loop
+        def handle_exception(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+            msg = context.get("exception", context["message"])
+            self.logger.error(f"Caught exception: {msg}")
+            self.stop(force=True)
 
-    async def __aexit__(
-        self, exc_t: Type[Exception], exc_v: Exception, exc_tb: TracebackType
-    ) -> None:
-        await self.gather()
-        Context.clean()
+        self.event_loop.set_exception_handler(handle_exception)
 
-    @classmethod
-    def clean(cls) -> None:
+    def freeze(self) -> None:
+        # First we make sure that this context is not frozen yet
+        if self.frozen:
+            raise ContextAlreadyFrozenException("This context is already frozen")
+
+        self._frozen = True
+
+        # Then we freeze all the entity context related to this context
+        from ouat.entity import EntityContext, EntityType
+
+        for entity in EntityType._entities:
+            entity_context = EntityContext.get(entity_type=entity, context=self)
+            entity_context.freeze()
+
+    def stop(self, *, force: bool = False) -> Future:
+        if force:
+            self.logger.debug("Stopping loop")
+            for task in asyncio.all_tasks(self.event_loop()):
+                task.cancel("Task cancelled by context shutdown")
+
+        if self._finalizer is None:
+            self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
+            self._finalizer.add_done_callback(lambda _: self.freeze())
+
+        return self._finalizer
+
+    def reset(self) -> None:
         """
         Get all the instances of all the entities it can find, and delete them.
         """
         from ouat.entity import EntityContext, EntityType
 
         for entity in EntityType._entities:
-            entity_context = EntityContext.get(
-                entity_type=entity, context=cls.__context
-            )
+            entity_context = EntityContext.get(entity_type=entity, context=self)
             entity_context.reset()
 
-        cls.__context = None
+        self._finalizer = None
+        self._initialized = False
+        self._frozen = False
 
-    @classmethod
-    def get(cls, *, create_ok: bool = False) -> "Context":
-        if cls.__context is not None:
-            return cls.__context
+    def run(self, entrypoint: Callable[[], Coroutine[Any, Any, None]]) -> None:
+        async def run() -> None:
+            self.init()
+            await entrypoint()
+            await self.stop()
 
-        if not create_ok:
-            raise ContextNotReadyError(
-                "Trying to access the context before it is created!"
-            )
+        asyncio.run(run())
 
-        cls.__context = Context()
-        return cls.__context
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(name={self.name})"
