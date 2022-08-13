@@ -39,15 +39,15 @@ class Stream(Generic[X]):
             f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
         )
 
-    def _emit_task(
+    def _trigger_callback(
         self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X
     ) -> str:
         """
         Helper method to create a new task, which takes a coroutine and feeds
         it the item provided in parameter.
         """
-        name = f"{callback}({item})@{self._bearer}.{self._placeholder}"
-        self._logger.debug("Starting new task: %s", name)
+        name = f"{callback.__name__}({item})"
+        self._logger.debug("Starting new callback: %s", name)
         to_be_awaited = callback(item)
         self._context.register(
             self._context.event_loop.create_task(
@@ -63,7 +63,7 @@ class Stream(Generic[X]):
         """
         self._callbacks.append(callback)
         for item in self._items:
-            self._emit_task(callback, item)
+            self._trigger_callback(callback, item)
 
     def send(self, item: Optional[X]) -> None:
         """
@@ -84,7 +84,7 @@ class Stream(Generic[X]):
 
         self._items.add(item)
         for callback in self._callbacks:
-            self._emit_task(callback, item)
+            self._trigger_callback(callback, item)
 
 
 def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:

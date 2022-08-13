@@ -96,7 +96,6 @@ logging.basicConfig(level=logging.DEBUG)
 async def main() -> None:
 
     will_be_bob = Person.get(index=Person.unique_name, arg="bob")
-    will_be_bob_2 = Person.get(index=Person.unique_name, arg="bob")
 
     bob = Person(name="bob", likes_dogs=True)
     marilyn = Person(name="marilyn", likes_dogs=False)
@@ -108,7 +107,6 @@ async def main() -> None:
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
     print(bob == bob_2)
     print(bob == await will_be_bob)
-    print(bob == await will_be_bob_2)
 
 
 Context().run(main)

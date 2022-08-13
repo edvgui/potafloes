@@ -18,13 +18,13 @@ def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     """
     Mark the current method as an index for the class it is a method of.
     """
-    cache: Dict["E", X] = dict()
+    cached_result_attr = f"__{func.__name__}_index"
 
     def index_or_cache(self) -> X:
-        if self not in cache:
-            cache[self] = func(self)
-
-        return cache[self]
+        if not hasattr(self, cached_result_attr):
+            object.__setattr__(self, cached_result_attr, func(self))
+        
+        return getattr(self, cached_result_attr)
 
     setattr(index_or_cache, INDEX_MARKER, True)
     index_or_cache.__name__ = func.__name__
@@ -50,23 +50,34 @@ def double_bind(
 ) -> None:
     def balance_factory(
         this_side: Callable[["E"], Stream["E1"]],
+        this_type: Type["E"],
         other_side: Callable[["E1"], Stream["E"]],
+        other_type: Type["E1"],
     ) -> Callable[[E], Coroutine[Any, Any, None]]:
         async def balance(this_obj: E) -> None:
             async def add_to_other_side(other_obj: E1) -> None:
                 stream = other_side(other_obj)
                 stream.send(this_obj)
 
+            add_to_other_side.__name__ = (
+                f"{other_type.__name__}.add_to_{other_side.__name__}"
+            )
+
             stream = this_side(this_obj)
             stream.subscribe(add_to_other_side)
+
+        balance.__name__ = (
+            f"double_bind({this_type.__name__}.{this_side.__name__}"
+            f" --> {other_type.__name__}.{other_side.__name__})"
+        )
 
         return balance
 
     entity_type_a = getattr(a, STREAM_MARKER)
-    implementation(entity_type_a)(balance_factory(a, b))
-
     entity_type_b = getattr(b, STREAM_MARKER)
-    implementation(entity_type_b)(balance_factory(b, a))
+
+    implementation(entity_type_a)(balance_factory(a, entity_type_a, b, entity_type_b))
+    implementation(entity_type_b)(balance_factory(b, entity_type_b, a, entity_type_a))
 
 
 class EntityType(type):
@@ -180,7 +191,7 @@ class Entity(metaclass=EntityType):
 
     def __str__(self) -> str:
         queries = [
-            f"{index.__name__}={index(self)}"
+            f"{index.__name__}={repr(index(self))}"
             for index in EntityDomain.get(entity_type=type(self)).indices
         ]
         return f"{type(self).__name__}[{', '.join(queries)}]"
