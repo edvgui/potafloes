@@ -1,6 +1,5 @@
 import logging
-from typing import (Any, Callable, Coroutine, Dict, Generic, List, Sequence,
-                    Type, TypeVar)
+from typing import Any, Callable, Coroutine, Dict, Generic, List, Sequence, Type, TypeVar
 
 from ouat.exceptions import DomainModifiedAfterFreezeException
 
@@ -39,9 +38,7 @@ class EntityDomain(Generic[X]):
     @property
     def indices(self) -> Sequence[Callable[[X], Y]]:
         if not self.frozen:
-            self.logger.warning(
-                "Accessing indices before the domain is frozen, list might be incomplete"
-            )
+            self.logger.warning("Accessing indices before the domain is frozen, list might be incomplete")
         return self._indices
 
     @property
@@ -49,23 +46,17 @@ class EntityDomain(Generic[X]):
         self,
     ) -> Sequence[Callable[[X], Coroutine[Any, Any, None]]]:
         if not self.frozen:
-            self.logger.warning(
-                "Accessing implementations before the domain is frozen, list might be incomplete"
-            )
+            self.logger.warning("Accessing implementations before the domain is frozen, list might be incomplete")
         return self._implementations
 
     def add_index(self, *, index: Callable[[X], Y]) -> None:
         if self.frozen:
-            raise DomainModifiedAfterFreezeException(
-                f"Can not add index {index} to domain, it is already frozen."
-            )
+            raise DomainModifiedAfterFreezeException(f"Can not add index {index} to domain, it is already frozen.")
 
         self.logger.debug("Register index %s", str(index))
         self._indices.append(index)
 
-    def add_implementation(
-        self, *, implementation: Callable[[X], Coroutine[Any, Any, None]]
-    ) -> None:
+    def add_implementation(self, *, implementation: Callable[[X], Coroutine[Any, Any, None]]) -> None:
         if self.frozen:
             raise DomainModifiedAfterFreezeException(
                 f"Can not add implementation {implementation} to domain, it is already frozen."

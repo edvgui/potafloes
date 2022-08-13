@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from typing import (Awaitable, Callable, Dict, FrozenSet, Generic, List,
-                    Mapping, Optional, Set, Tuple, Type, TypeVar)
+from typing import Awaitable, Callable, Dict, FrozenSet, Generic, List, Mapping, Optional, Set, Tuple, Type, TypeVar
 
 from ouat.context import Context
 from ouat.exceptions import ContextModifiedAfterFreezeException
@@ -53,9 +52,7 @@ class EntityContext(Generic[X]):
         queries to see if this instance can resolve any of them.
         """
         if self.frozen:
-            raise ContextModifiedAfterFreezeException(
-                f"Can not add instance {instance} to context, it is already frozen."
-            )
+            raise ContextModifiedAfterFreezeException(f"Can not add instance {instance} to context, it is already frozen.")
 
         # Register this instance
         self.logger.debug("Register instance %s", str(instance))
@@ -66,9 +63,7 @@ class EntityContext(Generic[X]):
         resolved: List[Tuple[Callable[[X], Y], Y]] = []
         for (index, arg), future in self._queries.items():
             if index(instance) == arg:
-                self.logger.debug(
-                    "Resolving query %s=%s with %s", str(index), str(arg), str(instance)
-                )
+                self.logger.debug("Resolving query %s=%s with %s", str(index), str(arg), str(instance))
                 future.set_value(instance)
                 resolved.append((index, arg))
 
@@ -82,9 +77,7 @@ class EntityContext(Generic[X]):
         you need to use find_instance.
         """
         if self.frozen:
-            raise ContextModifiedAfterFreezeException(
-                f"Can not add query {query}={result} to context, it is already frozen."
-            )
+            raise ContextModifiedAfterFreezeException(f"Can not add query {query}={result} to context, it is already frozen.")
 
         identifier = (query, result)
         if identifier in self._queries:
@@ -111,10 +104,7 @@ class EntityContext(Generic[X]):
                 )
                 return instance
 
-        raise LookupError(
-            f"Could not find any instance matching the query {query}={result} "
-            f"in {self._instances}"
-        )
+        raise LookupError(f"Could not find any instance matching the query {query}={result} " f"in {self._instances}")
 
     def freeze(self) -> None:
         """
@@ -125,9 +115,7 @@ class EntityContext(Generic[X]):
         self._frozen = True
 
         if self._queries:
-            self.logger.warning(
-                "Context has been frozen while some queries are still pending"
-            )
+            self.logger.warning("Context has been frozen while some queries are still pending")
 
     def reset(self) -> None:
         self.logger.info("Resetting context")

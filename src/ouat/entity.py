@@ -23,7 +23,7 @@ def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     def index_or_cache(self) -> X:
         if not hasattr(self, cached_result_attr):
             object.__setattr__(self, cached_result_attr, func(self))
-        
+
         return getattr(self, cached_result_attr)
 
     setattr(index_or_cache, INDEX_MARKER, True)
@@ -59,16 +59,13 @@ def double_bind(
                 stream = other_side(other_obj)
                 stream.send(this_obj)
 
-            add_to_other_side.__name__ = (
-                f"{other_type.__name__}.add_to_{other_side.__name__}"
-            )
+            add_to_other_side.__name__ = f"{other_type.__name__}.add_to_{other_side.__name__}"
 
             stream = this_side(this_obj)
             stream.subscribe(add_to_other_side)
 
         balance.__name__ = (
-            f"double_bind({this_type.__name__}.{this_side.__name__}"
-            f" --> {other_type.__name__}.{other_side.__name__})"
+            f"double_bind({this_type.__name__}.{this_side.__name__}" f" --> {other_type.__name__}.{other_side.__name__})"
         )
 
         return balance
@@ -107,9 +104,7 @@ class EntityType(type):
         self._entities.add(self)
 
     def __call__(self: Type["E"], **kwds: Any) -> Any:
-        return super().__call__(
-            **kwds, _context=Context(), _logger=logging.getLogger(__name__)
-        )
+        return super().__call__(**kwds, _context=Context(), _logger=logging.getLogger(__name__))
 
 
 class Entity(metaclass=EntityType):
@@ -136,18 +131,14 @@ class Entity(metaclass=EntityType):
         new_instance._logger.name = str(new_instance)
 
         entity_domain = EntityDomain.get(entity_type=cls)
-        entity_context = EntityContext.get(
-            entity_type=cls, context=new_instance._context
-        )
+        entity_context = EntityContext.get(entity_type=cls, context=new_instance._context)
 
         # Check if the new instance matches any of the other existing onces
         # based on the indices.  If this is the case, we should return the
         # previously created object instead of a new one.
         for indice in entity_domain.indices:
             try:
-                instance = entity_context.find_instance(
-                    query=indice, result=indice(new_instance)
-                )
+                instance = entity_context.find_instance(query=indice, result=indice(new_instance))
                 # This is a match, before returning the object, we should
                 # make sure that all our input attributes are the same
                 for key, value in kwargs.items():
@@ -172,9 +163,7 @@ class Entity(metaclass=EntityType):
 
         return new_instance
 
-    def _trigger_implementation(
-        self, callback: Callable[[X], Coroutine[Any, Any, None]]
-    ) -> str:
+    def _trigger_implementation(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> str:
         name = f"{callback}({self})"
         self._logger.debug(
             "Trigger implementation %s (%s)",
@@ -190,10 +179,7 @@ class Entity(metaclass=EntityType):
         )
 
     def __str__(self) -> str:
-        queries = [
-            f"{index.__name__}={repr(index(self))}"
-            for index in EntityDomain.get(entity_type=type(self)).indices
-        ]
+        queries = [f"{index.__name__}={repr(index(self))}" for index in EntityDomain.get(entity_type=type(self)).indices]
         return f"{type(self).__name__}[{', '.join(queries)}]"
 
     @classmethod
@@ -205,9 +191,7 @@ class Entity(metaclass=EntityType):
         """
         entity_domain = EntityDomain.get(entity_type=cls)
         if index not in entity_domain.indices:
-            raise ValueError(
-                f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}"
-            )
+            raise ValueError(f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}")
 
         entity_context = EntityContext.get(entity_type=cls)
 

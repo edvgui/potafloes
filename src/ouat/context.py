@@ -4,8 +4,7 @@ import threading
 from asyncio import Future
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Type
 
-from ouat.exceptions import (ContextAlreadyFrozenException,
-                             ContextAlreadyInitializedException)
+from ouat.exceptions import ContextAlreadyFrozenException, ContextAlreadyInitializedException
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,9 +61,7 @@ class Context:
     def init(self) -> None:
         # First, we make sure that the context is not already initialized
         if self.initalized:
-            raise ContextAlreadyInitializedException(
-                "This context is already initialized"
-            )
+            raise ContextAlreadyInitializedException("This context is already initialized")
 
         self._initialized = True
 

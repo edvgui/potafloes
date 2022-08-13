@@ -1,6 +1,5 @@
 import logging
-from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
-                    Type, TypeVar)
+from typing import Any, Callable, Coroutine, Generic, List, Optional, Set, Type, TypeVar
 
 from ouat.context import Context
 from ouat.exceptions import StreamItemTypeException
@@ -35,13 +34,9 @@ class Stream(Generic[X]):
         self._items: Set[X] = set()
 
         self._context = Context()
-        self._logger = logging.getLogger(
-            f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
-        )
+        self._logger = logging.getLogger(f"{type(self).__name__}@{self._bearer}.{self._placeholder}")
 
-    def _trigger_callback(
-        self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X
-    ) -> str:
+    def _trigger_callback(self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X) -> str:
         """
         Helper method to create a new task, which takes a coroutine and feeds
         it the item provided in parameter.
@@ -102,9 +97,7 @@ def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:
         if not hasattr(self, response_attribute):
             # We set the attribute using the object __setattr__ method as our object
             # is frozen, normal setattr doesn't work
-            object.__setattr__(
-                self, response_attribute, Stream(self, stream_name, func(self))
-            )
+            object.__setattr__(self, response_attribute, Stream(self, stream_name, func(self)))
 
         existing_stream = getattr(self, response_attribute)
         return existing_stream

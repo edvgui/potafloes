@@ -1,9 +1,7 @@
 import asyncio
-from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
-                    TypeVar)
+from typing import Any, Awaitable, Callable, Generator, Optional, Set, Type, TypeVar
 
-from ouat.exceptions import (BoundedStreamOverflowException,
-                             IncompleteBoundedStreamException)
+from ouat.exceptions import BoundedStreamOverflowException, IncompleteBoundedStreamException
 from ouat.stream import STREAM_MARKER, Stream
 
 X = TypeVar("X")
@@ -41,9 +39,7 @@ class BoundedStream(Stream[X]):
         self._min = min
         self._max = max
         self._count = 0
-        self._completed: Awaitable[Set[X]] = asyncio.Future(
-            loop=self._context.event_loop
-        )
+        self._completed: Awaitable[Set[X]] = asyncio.Future(loop=self._context.event_loop)
 
         self._context.register(self._completed)
 
@@ -81,17 +77,13 @@ class BoundedStream(Stream[X]):
         return self._completed.__await__()
 
 
-def bounded_stream(
-    *, min: int = 0, max: int
-) -> Callable[[Callable[["Y"], Type[X]]], Callable[["Y"], BoundedStream[X]]]:
+def bounded_stream(*, min: int = 0, max: int) -> Callable[[Callable[["Y"], Type[X]]], Callable[["Y"], BoundedStream[X]]]:
     """
     Mark the current method as a bounded stream, on which will be added and potentially
     subscribed items.  This stream has a minimum and maximum size.
     """
 
-    def bounded_stream_input(
-        func: Callable[["Y"], Type[X]]
-    ) -> Callable[["Y"], BoundedStream[X]]:
+    def bounded_stream_input(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], BoundedStream[X]]:
 
         # This is the name of the function wearing the decorator
         stream_name = func.__name__
