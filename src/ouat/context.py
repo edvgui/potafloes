@@ -83,6 +83,19 @@ class Context:
 
         self.event_loop.set_exception_handler(handle_exception)
 
+    def _finalizer_callback(self, finalizer: Future) -> None:
+        if self.tasks:
+            # We still have some pending tasks
+            self.finalize()
+        else:
+            self.freeze()
+
+    def finalize(self) -> None:
+        self.logger.debug(f"Finalizing context with {len(self.tasks)} pending tasks")
+        self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
+        self._finalizer.add_done_callback(self._finalizer_callback)
+        self.tasks.clear()
+
     def freeze(self) -> None:
         # First we make sure that this context is not frozen yet
         if self.frozen:
@@ -100,12 +113,11 @@ class Context:
     def stop(self, *, force: bool = False) -> Future:
         if force:
             self.logger.debug("Stopping loop")
-            for task in asyncio.all_tasks(self.event_loop()):
+            for task in self.tasks:
                 task.cancel("Task cancelled by context shutdown")
 
         if self._finalizer is None:
-            self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
-            self._finalizer.add_done_callback(lambda _: self.freeze())
+            self.finalize()
 
         return self._finalizer
 
@@ -126,7 +138,7 @@ class Context:
     def run(self, entrypoint: Callable[[], Coroutine[Any, Any, None]]) -> None:
         async def run() -> None:
             self.init()
-            await entrypoint()
+            self.register(entrypoint())
             await self.stop()
 
         asyncio.run(run())
