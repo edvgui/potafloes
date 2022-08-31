@@ -1,6 +1,6 @@
 import logging
 from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
-                    Type, TypeVar)
+                    Type, TypeVar, Union)
 
 from ouat.context import Context
 from ouat.exceptions import StreamItemTypeException
@@ -41,7 +41,7 @@ class Stream(Generic[X]):
 
     def _trigger_callback(
         self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X
-    ) -> str:
+    ) -> None:
         """
         Helper method to create a new task, which takes a coroutine and feeds
         it the item provided in parameter.
@@ -85,6 +85,22 @@ class Stream(Generic[X]):
         self._items.add(item)
         for callback in self._callbacks:
             self._trigger_callback(callback, item)
+
+    def __iadd__(self, other: Optional[Union[X, "Stream[X]"]]) -> "Stream[X]":
+        """
+        When using the += operator, we expect the other element to be either a stream,
+        in which case we will subscribe to it and add all its items to this stream, or
+        an object, in which case we try to add it to the stream.
+        """
+        if isinstance(other, Stream):
+            async def cb(item: X) -> None:
+                self.send(item)
+
+            other.subscribe(cb)
+            return self
+
+        self.send(other)
+        return self
 
 
 def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:

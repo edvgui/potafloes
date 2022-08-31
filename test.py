@@ -99,7 +99,10 @@ async def main() -> None:
 
     bob = Person(name="bob", likes_dogs=True)
     marilyn = Person(name="marilyn", likes_dogs=False)
-    marilyn.parents().send(bob)
+
+    marilyn_parents = marilyn.parents() 
+
+    marilyn_parents += bob
     marilyn.parents().send(None)
     bob.parents().send(None)
     bob.parents().send(None)

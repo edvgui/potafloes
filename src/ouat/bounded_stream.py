@@ -1,6 +1,6 @@
 import asyncio
 from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
-                    TypeVar)
+                    TypeVar, Union)
 
 from ouat.exceptions import (BoundedStreamOverflowException,
                              IncompleteBoundedStreamException)
@@ -76,6 +76,30 @@ class BoundedStream(Stream[X]):
             raise IncompleteBoundedStreamException(self)
 
         self._completed.set_result(self._items)
+
+    def __iadd__(self, other: Optional[Union[X, Stream[X], "BoundedStream[X]"]]) -> "BoundedStream[X]":
+        """
+        When using the += operator, we expect the other element to be either a stream,
+        in which case we will subscribe to it and add all its items to this stream, or
+        an object, in which case we try to add it to the stream.
+        If the stream being added has bounds, we will also try add all the None elements
+        that where added to it.  It means that adding a bounded stream to another guaranties
+        to fill up at least n spaces in this stream, where n is the size of the bounded
+        stream being added.
+        """
+        if isinstance(other, BoundedStream):
+            def cb(_) -> None:
+                for item in other._items:
+                    self.send(item)
+
+                for _ in range(other._count, other._max):
+                    self.send(None)
+
+            other._completed.add_done_callback(cb)
+            return self
+
+        super().__iadd__(other)
+        return self
 
     def __await__(self) -> Generator[Any, None, Set[X]]:
         return self._completed.__await__()
