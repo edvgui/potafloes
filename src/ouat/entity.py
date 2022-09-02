@@ -23,7 +23,7 @@ def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     def index_or_cache(self) -> X:
         if not hasattr(self, cached_result_attr):
             object.__setattr__(self, cached_result_attr, func(self))
-        
+
         return getattr(self, cached_result_attr)
 
     setattr(index_or_cache, INDEX_MARKER, True)

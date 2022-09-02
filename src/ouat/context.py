@@ -92,9 +92,10 @@ class Context:
 
     def finalize(self) -> None:
         self.logger.debug(f"Finalizing context with {len(self.tasks)} pending tasks")
-        self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
-        self._finalizer.add_done_callback(self._finalizer_callback)
-        self.tasks.clear()
+        if self.tasks:
+            self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
+            self._finalizer.add_done_callback(self._finalizer_callback)
+            self.tasks.clear()
 
     def freeze(self) -> None:
         # First we make sure that this context is not frozen yet
