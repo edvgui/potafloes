@@ -2,9 +2,9 @@ import asyncio
 from typing import (Any, Awaitable, Callable, Generator, Optional, Set, Type,
                     TypeVar, Union)
 
-from ouat.exceptions import (BoundedStreamOverflowException,
-                             IncompleteBoundedStreamException)
-from ouat.stream import STREAM_MARKER, Stream
+from patasync.exceptions import (BoundedStreamOverflowException,
+                                 IncompleteBoundedStreamException)
+from patasync.stream import STREAM_MARKER, Stream
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -77,7 +77,9 @@ class BoundedStream(Stream[X]):
 
         self._completed.set_result(self._items)
 
-    def __iadd__(self, other: Optional[Union[X, Stream[X], "BoundedStream[X]"]]) -> "BoundedStream[X]":
+    def __iadd__(
+        self, other: Optional[Union[X, Stream[X], "BoundedStream[X]"]]
+    ) -> "BoundedStream[X]":
         """
         When using the += operator, we expect the other element to be either a stream,
         in which case we will subscribe to it and add all its items to this stream, or
@@ -88,6 +90,7 @@ class BoundedStream(Stream[X]):
         stream being added.
         """
         if isinstance(other, BoundedStream):
+
             def cb(_) -> None:
                 for item in other._items:
                     self.send(item)

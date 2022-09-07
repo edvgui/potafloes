@@ -3,11 +3,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Dict, Set, Tuple, Type, TypeVar
 
-from ouat.context import Context
-from ouat.entity_context import EntityContext
-from ouat.entity_domain import EntityDomain
-from ouat.exceptions import DoubleSetException
-from ouat.stream import STREAM_MARKER, Stream
+from patasync.context import Context
+from patasync.entity_context import EntityContext
+from patasync.entity_domain import EntityDomain
+from patasync.exceptions import DoubleSetException
+from patasync.stream import STREAM_MARKER, Stream
 
 X = TypeVar("X")
 INDEX_MARKER = "entity_index"

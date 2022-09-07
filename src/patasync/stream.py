@@ -2,8 +2,8 @@ import logging
 from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
                     Type, TypeVar, Union)
 
-from ouat.context import Context
-from ouat.exceptions import StreamItemTypeException
+from patasync.context import Context
+from patasync.exceptions import StreamItemTypeException
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -93,6 +93,7 @@ class Stream(Generic[X]):
         an object, in which case we try to add it to the stream.
         """
         if isinstance(other, Stream):
+
             async def cb(item: X) -> None:
                 self.send(item)
 

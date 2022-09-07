@@ -3,8 +3,8 @@ import logging
 from typing import (Awaitable, Callable, Dict, FrozenSet, Generic, List,
                     Mapping, Optional, Set, Tuple, Type, TypeVar)
 
-from ouat.context import Context
-from ouat.exceptions import ContextModifiedAfterFreezeException
+from patasync.context import Context
+from patasync.exceptions import ContextModifiedAfterFreezeException
 
 X = TypeVar("X")
 Y = TypeVar("Y")

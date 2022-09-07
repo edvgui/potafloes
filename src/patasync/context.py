@@ -4,8 +4,8 @@ import threading
 from asyncio import Future
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Type
 
-from ouat.exceptions import (ContextAlreadyFrozenException,
-                             ContextAlreadyInitializedException)
+from patasync.exceptions import (ContextAlreadyFrozenException,
+                                 ContextAlreadyInitializedException)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class Context:
         self._initialized = True
 
         # Then, we make sure that the domain is frozen
-        from ouat.entity import EntityDomain, EntityType
+        from patasync.entity import EntityDomain, EntityType
 
         for entity_type in EntityType._entities:
             entity_domain = EntityDomain.get(entity_type=entity_type)
@@ -105,7 +105,7 @@ class Context:
         self._frozen = True
 
         # Then we freeze all the entity context related to this context
-        from ouat.entity import EntityContext, EntityType
+        from patasync.entity import EntityContext, EntityType
 
         for entity in EntityType._entities:
             entity_context = EntityContext.get(entity_type=entity, context=self)
@@ -126,7 +126,7 @@ class Context:
         """
         Get all the instances of all the entities it can find, and delete them.
         """
-        from ouat.entity import EntityContext, EntityType
+        from patasync.entity import EntityContext, EntityType
 
         for entity in EntityType._entities:
             entity_context = EntityContext.get(entity_type=entity, context=self)

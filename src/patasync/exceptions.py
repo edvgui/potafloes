@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
-    from ouat.bounded_stream import BoundedStream
-    from ouat.entity import E
-    from ouat.stream import Stream
+    from patasync.bounded_stream import BoundedStream
+    from patasync.entity import E
+    from patasync.stream import Stream
 
 
 X = TypeVar("X")

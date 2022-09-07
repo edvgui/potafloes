@@ -2,7 +2,7 @@ import logging
 from typing import (Any, Callable, Coroutine, Dict, Generic, List, Sequence,
                     Type, TypeVar)
 
-from ouat.exceptions import DomainModifiedAfterFreezeException
+from patasync.exceptions import DomainModifiedAfterFreezeException
 
 X = TypeVar("X")
 Y = TypeVar("Y")
