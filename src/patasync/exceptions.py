@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
-    from patasync.bounded_stream import BoundedStream
+    from patasync.value import BoundedStream
     from patasync.entity import E
     from patasync.stream import Stream
 

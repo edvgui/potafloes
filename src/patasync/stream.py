@@ -1,18 +1,16 @@
-import logging
-from typing import (Any, Callable, Coroutine, Generic, List, Optional, Set,
-                    Type, TypeVar, Union)
+import typing
+from patasync import attachment
 
-from patasync.context import Context
 from patasync.exceptions import StreamItemTypeException
 
-X = TypeVar("X")
-Y = TypeVar("Y")
+X = typing.TypeVar("X")
+Y = typing.TypeVar("Y")
 
 
 STREAM_MARKER = "entity_stream"
 
 
-class Stream(Generic[X]):
+class Stream(attachment.Attachment[X]):
     """
     A stream object can be used to register callbacks, that will be called for
     each item that is sent into the stream.  A stream has no upper bound, it
@@ -20,43 +18,18 @@ class Stream(Generic[X]):
     never await for this to finish, it doesn't even have a notion of completion.
     """
 
-    def __init__(self, bearer: Y, placeholder: str, object_type: Type[X]) -> None:
+    def __init__(self, bearer: Y, placeholder: str, object_type: typing.Type[X]) -> None:
         """
         :param bearer: The object this stream is attached to.
         :param placeholder: The name of the object function this stream is a placeholder for.
         :param object_type: The type of objects to expect in the stream.  Objects introduced
             in the stream are expected to be a subclass of this type.
         """
-        self._bearer = bearer
-        self._placeholder = placeholder
-        self._object_type = object_type
+        super().__init__(bearer, placeholder, object_type)
 
-        self._callbacks: List[Callable[[X], Coroutine[Any, Any, None]]] = []
-        self._items: Set[X] = set()
+        self._items: typing.Set[X] = set()
 
-        self._context = Context()
-        self._logger = logging.getLogger(
-            f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
-        )
-
-    def _trigger_callback(
-        self, callback: Callable[[X], Coroutine[Any, Any, None]], item: X
-    ) -> None:
-        """
-        Helper method to create a new task, which takes a coroutine and feeds
-        it the item provided in parameter.
-        """
-        name = f"{callback.__name__}({item})"
-        self._logger.debug("Starting new callback: %s", name)
-        to_be_awaited = callback(item)
-        self._context.register(
-            self._context.event_loop.create_task(
-                to_be_awaited,
-                name=name,
-            )
-        )
-
-    def subscribe(self, callback: Callable[[X], Coroutine[Any, Any, None]]) -> None:
+    def subscribe(self, callback: typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]) -> None:
         """
         Subscribe to each item emitted in this stream.  The callback should be a coroutine
         and will be called exactly once for each item in the stream.
@@ -65,7 +38,7 @@ class Stream(Generic[X]):
         for item in self._items:
             self._trigger_callback(callback, item)
 
-    def send(self, item: Optional[X]) -> None:
+    def send(self, item: typing.Optional[X]) -> None:
         """
         Send a new item in the stream.  All registered callback will be called with
         this item in argument, unless this item has already been sent or the item
@@ -86,7 +59,7 @@ class Stream(Generic[X]):
         for callback in self._callbacks:
             self._trigger_callback(callback, item)
 
-    def __iadd__(self, other: Optional[Union[X, "Stream[X]"]]) -> "Stream[X]":
+    def __iadd__(self, other: typing.Optional[typing.Union[X, "Stream[X]"]]) -> "Stream[X]":
         """
         When using the += operator, we expect the other element to be either a stream,
         in which case we will subscribe to it and add all its items to this stream, or
@@ -104,7 +77,7 @@ class Stream(Generic[X]):
         return self
 
 
-def stream(func: Callable[["Y"], Type[X]]) -> Callable[["Y"], Stream[X]]:
+def stream(func: typing.Callable[["Y"], typing.Type[X]]) -> typing.Callable[["Y"], Stream[X]]:
     """
     Mark the current method as a stream, on which will be added and potentially
     subscribed items
