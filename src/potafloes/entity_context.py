@@ -3,8 +3,8 @@ import logging
 from typing import (Awaitable, Callable, Dict, FrozenSet, Generic, List,
                     Mapping, Optional, Set, Tuple, Type, TypeVar)
 
-from patasync.context import Context
-from patasync.exceptions import ContextModifiedAfterFreezeException
+from potafloes.context import Context
+from potafloes.exceptions import ContextModifiedAfterFreezeException
 
 X = TypeVar("X")
 Y = TypeVar("Y")
@@ -16,7 +16,7 @@ class EntityContext(Generic[X]):
     in which its instances are created.
     """
 
-    __entity_contexts: Dict[Tuple[Type[Y], Context], "EntityContext[Y]"] = dict()
+    __entity_contexts: Dict[Tuple[Type, Context], "EntityContext"] = dict()
 
     def __init__(self, entity_type: Type[X], context: Context) -> None:
         super().__init__()
@@ -24,7 +24,9 @@ class EntityContext(Generic[X]):
         self.context = context
         self.logger = logging.getLogger(f"{entity_type.__name__}Context")
 
-        self._queries: Dict[Tuple[Callable[[X], Y], Y], asyncio.Future] = dict()
+        self._queries: Dict[
+            Tuple[Callable[[X], object], object], asyncio.Future
+        ] = dict()
         self._instances: Set[X] = set()
 
         self._frozen = False
@@ -34,7 +36,7 @@ class EntityContext(Generic[X]):
         return self._frozen
 
     @property
-    def queries(self) -> Mapping[Tuple[Callable[[X], Y], Y], asyncio.Future]:
+    def queries(self) -> Mapping[Tuple[Callable[[X], object], object], asyncio.Future]:
         """
         Get the queries dict, as a frozen dict, it should not be tempered with.
         """
@@ -45,7 +47,7 @@ class EntityContext(Generic[X]):
         """
         Get the instances set, as a frozen set, it should not be tempered with.
         """
-        return self._instances
+        return self._instances  # type: ignore
 
     def add_instance(self, instance: X) -> None:
         """
@@ -63,19 +65,19 @@ class EntityContext(Generic[X]):
 
         # Go across all the queries to see if any can be resolved with this new
         # instance
-        resolved: List[Tuple[Callable[[X], Y], Y]] = []
+        resolved: List[Tuple[Callable[[X], object], object]] = []
         for (index, arg), future in self._queries.items():
             if index(instance) == arg:
                 self.logger.debug(
                     "Resolving query %s=%s with %s", str(index), str(arg), str(instance)
                 )
-                future.set_value(instance)
+                future.set_value(instance)  # type: ignore
                 resolved.append((index, arg))
 
         for res in resolved:
             self._queries.pop(res)
 
-    def add_query(self, *, query=Callable[[Type[X]], Y], result=Y) -> Awaitable[X]:
+    def add_query(self, *, query=Callable[[X], Y], result=Y) -> Awaitable[X]:
         """
         Register a new query, every time a new instance is added, we will check if it matches
         the query.  If it does not check if any existing instance is already a match.  For this
@@ -91,10 +93,10 @@ class EntityContext(Generic[X]):
             return self._queries[identifier]
 
         self.logger.debug("Register query %s=%s", str(query), str(result))
-        self._queries[identifier] = asyncio.Future(loop=self.context.event_loop())
+        self._queries[identifier] = asyncio.Future(loop=self.context.event_loop)
         return self._queries[identifier]
 
-    def find_instance(self, *, query=Callable[[Type[X]], Y], result=Y) -> X:
+    def find_instance(self, *, query=Callable[[X], Y], result=Y) -> X:
         """
         Find an return the first instance with matching index.  The query will
         be called on each known instance, and if the result matches the provided

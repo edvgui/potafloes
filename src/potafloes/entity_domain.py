@@ -1,14 +1,13 @@
 import logging
-from typing import (Any, Callable, Coroutine, Dict, Generic, List, Sequence,
-                    Type, TypeVar)
+import typing
 
-from patasync.exceptions import DomainModifiedAfterFreezeException
+from potafloes import attachment, exceptions
 
-X = TypeVar("X")
-Y = TypeVar("Y")
+X = typing.TypeVar("X")
+Y = typing.TypeVar("Y")
 
 
-class EntityDomain(Generic[X]):
+class EntityDomain(typing.Generic[X]):
     """
     An entity domain instance will hold all the static information about an entity
     type:
@@ -20,15 +19,18 @@ class EntityDomain(Generic[X]):
     unfrozen when a context becomes active.
     """
 
-    __entity_domains: Dict[Type[Y], "EntityDomain[Y]"] = dict()
+    __entity_domains: typing.Dict[typing.Type, "EntityDomain"] = dict()
 
-    def __init__(self, entity_type: Type[X]) -> None:
+    def __init__(self, entity_type: typing.Type[X]) -> None:
         super().__init__()
         self.entity_type = entity_type
         self.logger = logging.getLogger(f"{entity_type.__name__}Domain")
 
-        self._indices: List[Callable[[X], X]] = list()
-        self._implementations: List[Callable[[X], Coroutine[Any, Any, None]]] = list()
+        self._indices: typing.List[typing.Callable[[X], object]] = list()
+        self._implementations: typing.List[
+            typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
+        ] = list()
+        self._attachments: typing.List[attachment.AttachmentReference] = list()
 
         self._frozen = False
 
@@ -37,7 +39,7 @@ class EntityDomain(Generic[X]):
         return self._frozen
 
     @property
-    def indices(self) -> Sequence[Callable[[X], Y]]:
+    def indices(self) -> typing.Sequence[typing.Callable[[X], object]]:
         if not self.frozen:
             self.logger.warning(
                 "Accessing indices before the domain is frozen, list might be incomplete"
@@ -47,16 +49,26 @@ class EntityDomain(Generic[X]):
     @property
     def implementations(
         self,
-    ) -> Sequence[Callable[[X], Coroutine[Any, Any, None]]]:
+    ) -> typing.Sequence[
+        typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
+    ]:
         if not self.frozen:
             self.logger.warning(
                 "Accessing implementations before the domain is frozen, list might be incomplete"
             )
         return self._implementations
 
-    def add_index(self, *, index: Callable[[X], Y]) -> None:
+    @property
+    def attachments(self) -> typing.Sequence[attachment.AttachmentReference]:
+        if not self.frozen:
+            self.logger.warning(
+                "Accessing attachments before the domain is frozen, list might be incomplete"
+            )
+        return self._attachments
+
+    def add_index(self, *, index: typing.Callable[[X], Y]) -> None:
         if self.frozen:
-            raise DomainModifiedAfterFreezeException(
+            raise exceptions.DomainModifiedAfterFreezeException(
                 f"Can not add index {index} to domain, it is already frozen."
             )
 
@@ -64,22 +76,39 @@ class EntityDomain(Generic[X]):
         self._indices.append(index)
 
     def add_implementation(
-        self, *, implementation: Callable[[X], Coroutine[Any, Any, None]]
+        self,
+        *,
+        implementation: typing.Callable[
+            [X], typing.Coroutine[typing.Any, typing.Any, None]
+        ],
     ) -> None:
         if self.frozen:
-            raise DomainModifiedAfterFreezeException(
+            raise exceptions.DomainModifiedAfterFreezeException(
                 f"Can not add implementation {implementation} to domain, it is already frozen."
             )
 
         self.logger.debug("Register implementation %s", str(implementation))
         self._implementations.append(implementation)
 
+    def add_attachment(
+        self, *, attachment_reference: attachment.AttachmentReference
+    ) -> None:
+        if self.frozen:
+            raise exceptions.DomainModifiedAfterFreezeException(
+                f"Can not add attachment {attachment_reference} to domain, it is already frozen."
+            )
+
+        self.logger.debug("Registering attachment %s", str(attachment_reference))
+        self._attachments.append(attachment_reference)
+
     def freeze(self) -> None:
         self.logger.info("Freezing domain")
         self._frozen = True
 
     @classmethod
-    def get(cls: Type["EntityDomain[X]"], *, entity_type: Type[X]) -> "EntityDomain[X]":
+    def get(
+        cls: typing.Type["EntityDomain[X]"], *, entity_type: typing.Type[X]
+    ) -> "EntityDomain[X]":
         """
         Get the domain instance for this entity type.
         """
