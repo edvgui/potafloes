@@ -28,7 +28,6 @@ class Person(Entity):
 async def handle_children(person: Person) -> None:
     print(f"Dealing with children of {person}")
     person.children.subscribe(callback=person.praise_child)
-    person.children.subscribe(attachment=person.parents)
 
 
 @implementation(Person)
@@ -51,6 +50,7 @@ async def main() -> None:
     marilyn = Person(name="marilyn", likes_dogs=False)
 
     marilyn.parents += bob
+    bob.children += marilyn
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
     print(bob == bob_2)
