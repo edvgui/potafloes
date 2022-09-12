@@ -12,7 +12,7 @@ class Single(attachment.Attachment[X]):
         self,
         bearer: Y,
         placeholder: str,
-        object_type: typing.Type[X],
+        object_type: type[X],
         *,
         optional: bool,
     ) -> None:
@@ -22,7 +22,7 @@ class Single(attachment.Attachment[X]):
 
         self._context.register(self._completed)
 
-    def _insert(self, item: typing.Optional[X]) -> bool:
+    def _insert(self, item: X | None) -> bool:
         if item is None and self._optional:
             raise ValueError(f"Can not assign None to non-optional attachment: {self}")
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 import sys
 import typing
-from typing import Any, Callable, Coroutine, Dict, Set, Tuple, Type, TypeVar
 
 from potafloes import attachment
 from potafloes.context import Context
@@ -12,12 +12,15 @@ from potafloes.entity_context import EntityContext
 from potafloes.entity_domain import EntityDomain
 from potafloes.exceptions import DoubleSetException
 
-X = TypeVar("X")
+X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
 DOUBLE_BIND_MARKER = "double_bind"
+TYPE_ANNOTATION_EXPRESSION = re.compile(
+    r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?"
+)
 
 
-def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
+def index(func: typing.Callable[[E], X]) -> typing.Callable[[E], X]:
     """
     Mark the current method as an index for the class it is a method of.
     """
@@ -35,12 +38,15 @@ def index(func: Callable[["E"], X]) -> Callable[["E"], X]:
     return index_or_cache
 
 
-def implementation(entity_type: Type["E"]):
+def implementation(entity_type: type[E]):
+    """
+    Register a function that should be called for each instance of the specified entity type.
+    """
     entity_domain = EntityDomain.get(entity_type=entity_type)
 
     def register_implementation(
-        func: Callable[["E"], Coroutine[Any, Any, None]]
-    ) -> Callable[["Entity"], Coroutine[Any, Any, None]]:
+        func: typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]
+    ) -> typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]:
         entity_domain.add_implementation(implementation=func)
         return func
 
@@ -48,24 +54,22 @@ def implementation(entity_type: Type["E"]):
 
 
 class EntityType(type):
-    _entities: Set[Type["E"]] = set()
+    _entities: set[EntityType] = set()
 
-    def __init__(
-        self: Type["E"], name: str, __bases: Tuple, __dict: Dict, **kwds
-    ) -> None:
+    def __init__(cls, name: str, __bases: tuple, __dict: dict, **kwds) -> None:
         super().__init__(name, __bases, __dict, **kwds)
 
-        entity_domain = EntityDomain["E"].get(entity_type=self)
+        entity_domain = EntityDomain[object].get(entity_type=cls)
 
-        for _, method in self.__dict__.items():
+        for _, method in cls.__dict__.items():
             if hasattr(method, INDEX_MARKER):
                 # This is an index, we should register it
                 entity_domain.add_index(index=method)
                 continue
 
         # Go through all attribute annotations and save the ones which are attachments
-        for attribute, attribute_type, globals, locals in self._attributes():
-            base_type = attachment.ATTACHMENT_TYPE_ANNOTATION.match(attribute_type)
+        for attribute, attribute_type, globals, locals in cls._attributes():
+            base_type = TYPE_ANNOTATION_EXPRESSION.match(attribute_type)
             if not base_type:
                 # TODO warn for unparsable type
                 continue
@@ -74,16 +78,16 @@ class EntityType(type):
             try:
                 _type = eval(base_type.group(1), globals, locals)
             except NameError:
-                # The type is not resolved yet
+                # The type is not resolved yet, this is a simple attribute
                 continue
 
             if _type not in attachment.ATTACHMENT_TYPES:
-                # The type is not an attachment
+                # The type is not an attachment, this is a simple attribute
                 continue
 
             entity_domain.add_attachment(
                 attachment_reference=attachment.AttachmentReference(
-                    bearer_class=self,
+                    bearer_class=cls,
                     placeholder=attribute,
                     inner_type_expression=base_type.group(2),
                     outer_type=_type,
@@ -92,10 +96,10 @@ class EntityType(type):
                 )
             )
 
-        self._entities.add(self)
+        cls._entities.add(cls)
 
-    def _attributes(self) -> typing.Generator[Tuple[str, str, dict, dict], None, None]:
-        for base in reversed(self.__mro__):
+    def _attributes(cls) -> typing.Generator[tuple[str, str, dict, dict], None, None]:
+        for base in reversed(cls.__mro__):
             # This logic is only valid for python 3.10+ and when using __future__.annotations
             globals = getattr(sys.modules.get(base.__module__, None), "__dict__", {})
             locals = dict(vars(base))
@@ -131,7 +135,7 @@ class Entity(metaclass=EntityType):
     From that point, __setattr__ will raise an exception.
     """
 
-    def __new__(cls: type["E"], **kwargs) -> "E":
+    def __new__(cls: type[E], **kwargs) -> E:
         new_instance = object.__new__(cls)
 
         # Initialize the object
@@ -228,7 +232,7 @@ class Entity(metaclass=EntityType):
     def __init__(self, **kwargs) -> None:
         ...
 
-    def __setattr__(self, __name: str, __value: Any) -> None:
+    def __setattr__(self, __name: str, __value: typing.Any) -> None:
         # If we don't get that here, we will fail to set _created to True
         created = self._created
 
@@ -240,8 +244,9 @@ class Entity(metaclass=EntityType):
             raise RuntimeError("Can not modify created entity.")
 
     def _trigger_implementation(
-        self, callback: Callable[[X], Coroutine[Any, Any, None]]
-    ) -> str:
+        self: E,
+        callback: typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]],
+    ) -> None:
         name = f"{callback}({self})"
         self._logger.debug(
             "Trigger implementation %s (%s)",
@@ -264,7 +269,7 @@ class Entity(metaclass=EntityType):
         return f"{type(self).__name__}[{', '.join(queries)}]"
 
     @classmethod
-    async def get(cls: Type["E"], *, index=Callable[["E"], X], arg=X) -> "E":
+    async def get(cls: type[E], *, index=typing.Callable[[object], X], arg=X) -> E:
         """
         Query an instance of the current type using one of its index function and
         the set of values it is expected to return.  Those queries can only be made
@@ -284,5 +289,5 @@ class Entity(metaclass=EntityType):
             return await entity_context.add_query(query=index, result=arg)
 
 
-E = TypeVar("E", bound=Entity)
-E1 = TypeVar("E1", bound=Entity)
+E = typing.TypeVar("E", bound=Entity)
+E1 = typing.TypeVar("E1", bound=Entity)

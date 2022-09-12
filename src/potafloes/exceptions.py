@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 if TYPE_CHECKING:
     from potafloes.attachment import Attachment
     from potafloes.entity import E
-    from potafloes.value import BoundedBag
 
 
 X = TypeVar("X")

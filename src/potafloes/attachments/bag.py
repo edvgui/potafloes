@@ -15,9 +15,7 @@ class Bag(attachment.Attachment[X]):
     never await for this to finish, it doesn't even have a notion of completion.
     """
 
-    def __init__(
-        self, bearer: Y, placeholder: str, object_type: typing.Type[X]
-    ) -> None:
+    def __init__(self, bearer: Y, placeholder: str, object_type: type[X]) -> None:
         """
         :param bearer: The object this bag is attached to.
         :param placeholder: The name of the object function this bag is a placeholder for.
@@ -26,9 +24,9 @@ class Bag(attachment.Attachment[X]):
         """
         super().__init__(bearer, placeholder, object_type)
 
-        self._items: typing.Set[X] = set()
+        self._items: set[X] = set()
 
-    def _insert(self, item: typing.Optional[X]) -> bool:
+    def _insert(self, item: X | None) -> bool:
         if item is None:
             # We skip None items
             return False

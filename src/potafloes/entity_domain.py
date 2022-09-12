@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import typing
 
@@ -19,18 +21,19 @@ class EntityDomain(typing.Generic[X]):
     unfrozen when a context becomes active.
     """
 
-    __entity_domains: typing.Dict[typing.Type, "EntityDomain"] = dict()
+    __entity_domains: dict[type, EntityDomain] = dict()
 
-    def __init__(self, entity_type: typing.Type[X]) -> None:
+    def __init__(self, entity_type: type[X]) -> None:
         super().__init__()
         self.entity_type = entity_type
         self.logger = logging.getLogger(f"{entity_type.__name__}Domain")
 
-        self._indices: typing.List[typing.Callable[[X], object]] = list()
-        self._implementations: typing.List[
+        self._indices: list[typing.Callable[[X], object]] = list()
+        self._implementations: list[
             typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
         ] = list()
-        self._attachments: typing.List[attachment.AttachmentReference] = list()
+        self._attachments: list[attachment.AttachmentReference] = list()
+        self._attributes: dict[str, str] = dict()
 
         self._frozen = False
 
@@ -106,9 +109,7 @@ class EntityDomain(typing.Generic[X]):
         self._frozen = True
 
     @classmethod
-    def get(
-        cls: typing.Type["EntityDomain[X]"], *, entity_type: typing.Type[X]
-    ) -> "EntityDomain[X]":
+    def get(cls: type[EntityDomain[X]], *, entity_type: type[X]) -> EntityDomain[X]:
         """
         Get the domain instance for this entity type.
         """

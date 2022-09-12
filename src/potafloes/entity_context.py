@@ -1,33 +1,34 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import (Awaitable, Callable, Dict, FrozenSet, Generic, List,
-                    Mapping, Optional, Set, Tuple, Type, TypeVar)
+import typing
 
 from potafloes.context import Context
 from potafloes.exceptions import ContextModifiedAfterFreezeException
 
-X = TypeVar("X")
-Y = TypeVar("Y")
+X = typing.TypeVar("X")
+Y = typing.TypeVar("Y")
 
 
-class EntityContext(Generic[X]):
+class EntityContext(typing.Generic[X]):
     """
     This class makes the binding between an entity class and the context
     in which its instances are created.
     """
 
-    __entity_contexts: Dict[Tuple[Type, Context], "EntityContext"] = dict()
+    __entity_contexts: dict[tuple[type, Context], EntityContext] = dict()
 
-    def __init__(self, entity_type: Type[X], context: Context) -> None:
+    def __init__(self, entity_type: type[X], context: Context) -> None:
         super().__init__()
         self.entity_type = entity_type
         self.context = context
         self.logger = logging.getLogger(f"{entity_type.__name__}Context")
 
-        self._queries: Dict[
-            Tuple[Callable[[X], object], object], asyncio.Future
+        self._queries: dict[
+            tuple[typing.Callable[[X], object], object], asyncio.Future
         ] = dict()
-        self._instances: Set[X] = set()
+        self._instances: set[X] = set()
 
         self._frozen = False
 
@@ -36,14 +37,16 @@ class EntityContext(Generic[X]):
         return self._frozen
 
     @property
-    def queries(self) -> Mapping[Tuple[Callable[[X], object], object], asyncio.Future]:
+    def queries(
+        self,
+    ) -> typing.Mapping[tuple[typing.Callable[[X], object], object], asyncio.Future]:
         """
         Get the queries dict, as a frozen dict, it should not be tempered with.
         """
         return self._queries
 
     @property
-    def instances(self) -> FrozenSet[X]:
+    def instances(self) -> typing.FrozenSet[X]:
         """
         Get the instances set, as a frozen set, it should not be tempered with.
         """
@@ -65,7 +68,7 @@ class EntityContext(Generic[X]):
 
         # Go across all the queries to see if any can be resolved with this new
         # instance
-        resolved: List[Tuple[Callable[[X], object], object]] = []
+        resolved: list[tuple[typing.Callable[[X], object], object]] = []
         for (index, arg), future in self._queries.items():
             if index(instance) == arg:
                 self.logger.debug(
@@ -77,7 +80,9 @@ class EntityContext(Generic[X]):
         for res in resolved:
             self._queries.pop(res)
 
-    def add_query(self, *, query=Callable[[X], Y], result=Y) -> Awaitable[X]:
+    def add_query(
+        self, *, query=typing.Callable[[object], Y], result=Y
+    ) -> typing.Awaitable[X]:
         """
         Register a new query, every time a new instance is added, we will check if it matches
         the query.  If it does not check if any existing instance is already a match.  For this
@@ -96,7 +101,7 @@ class EntityContext(Generic[X]):
         self._queries[identifier] = asyncio.Future(loop=self.context.event_loop)
         return self._queries[identifier]
 
-    def find_instance(self, *, query=Callable[[X], Y], result=Y) -> X:
+    def find_instance(self, *, query=typing.Callable[[object], Y], result=Y) -> X:
         """
         Find an return the first instance with matching index.  The query will
         be called on each known instance, and if the result matches the provided
@@ -139,11 +144,11 @@ class EntityContext(Generic[X]):
 
     @classmethod
     def get(
-        cls: Type["EntityContext[X]"],
+        cls: type[EntityContext[X]],
         *,
-        entity_type: Type[X],
-        context: Optional[Context] = None,
-    ) -> "EntityContext[X]":
+        entity_type: type[X],
+        context: Context | None = None,
+    ) -> EntityContext[X]:
         """
         Get the context instance for this entity_type and this base context.
         If none exists yet, and create_ok is True, then a new one is created.

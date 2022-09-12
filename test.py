@@ -36,7 +36,7 @@ async def handle_parents(person: Person) -> None:
     print(f"Dealing with parents of {person}")
     async def praise_parent(parent: Person) -> None:
         print(f"{person.name} says: {parent.name} is my parent")
-    
+
     person.parents.subscribe(callback=praise_parent)
 
 

@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import abc
 import dataclasses
 import logging
-import re
 import typing
 
 from potafloes import context, exceptions
 
 X = typing.TypeVar("X")
 Y = typing.TypeVar("Y")
+
+Callback = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
 
 
 class Attachment(typing.Generic[X]):
@@ -17,9 +20,7 @@ class Attachment(typing.Generic[X]):
     the model.
     """
 
-    def __init__(
-        self, bearer: object, placeholder: str, object_type: typing.Type[X]
-    ) -> None:
+    def __init__(self, bearer: object, placeholder: str, object_type: type[X]) -> None:
         """
         :param bearer: The object this attachment is attached to.
         :param placeholder: The name of the object function this attachment is a placeholder for.
@@ -30,7 +31,7 @@ class Attachment(typing.Generic[X]):
         self._placeholder = placeholder
         self._object_type = object_type
 
-        self._callbacks: typing.List[
+        self._callbacks: list[
             typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
         ] = []
 
@@ -59,7 +60,7 @@ class Attachment(typing.Generic[X]):
         )
 
     @abc.abstractmethod
-    def _insert(self, item: typing.Optional[X]) -> bool:
+    def _insert(self, item: X | None) -> bool:
         """
         Insert this item into this attachment.  Returns True if the insertion
         was impacting for the attachment, False otherwise.
@@ -72,7 +73,7 @@ class Attachment(typing.Generic[X]):
         """
 
     @typing.overload
-    def subscribe(self, *, attachment: "Attachment[X]") -> None:
+    def subscribe(self, *, attachment: Attachment[X]) -> None:
         """
         For each value added in this attachment, add them to the attachment in argument as well.
         """
@@ -81,28 +82,36 @@ class Attachment(typing.Generic[X]):
     def subscribe(
         self,
         *,
-        callback: typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]],
+        callback: Callback[X],
     ) -> None:
         """
         Subscribe to the value set in this attachment.
         """
 
-    def subscribe(self, **kwargs: object) -> None:
-        if "attachment" in kwargs:
-            attachment: Attachment = kwargs["attachment"]
+    def subscribe(
+        self,
+        *,
+        attachment: Attachment[X] | None = None,
+        callback: Callback[X] | None = None,
+    ) -> None:
+        if attachment is not None:
 
-            async def callback(item: X) -> None:
+            async def cb(item: X) -> None:
+                assert attachment is not None  # Make mypy happy
                 attachment.send(item)
 
-            kwargs["callback"] = callback
+            callback = cb
 
-        callback = kwargs["callback"]
+        if callback is None:
+            raise ValueError(
+                "At least one of attachment or callback attribute should be set."
+            )
 
         self._callbacks.append(callback)
         for item in self._all():
             self._trigger_callback(callback, item)
 
-    def send(self, __item: typing.Optional[X]) -> None:
+    def send(self, __item: X | None) -> None:
         """
         Send an item and assign it to this attachment
         """
@@ -119,9 +128,7 @@ class Attachment(typing.Generic[X]):
             for callback in self._callbacks:
                 self._trigger_callback(callback, __item)
 
-    def __iadd__(
-        self: "A", other: typing.Optional[typing.Union[X, "Attachment[X]"]]
-    ) -> "A":
+    def __iadd__(self: A, other: X | Attachment[X] | None) -> A:
         """
         When using the += operator, we expect the other element to be either an attachment,
         in which case we will subscribe to it and add all its items to this attachment, or
@@ -142,10 +149,10 @@ class AttachmentReference(typing.Generic[X, Y]):
     needs to be created when building the entity.
     """
 
-    bearer_class: typing.Type[Y]
+    bearer_class: type[Y]
     placeholder: str
-    inner_type_expression: typing.Optional[str]
-    outer_type: typing.Type[Attachment]
+    inner_type_expression: str | None
+    outer_type: type[Attachment]
     globals: dict
     locals: dict
 
@@ -177,11 +184,10 @@ class AttachmentReference(typing.Generic[X, Y]):
 
 
 A = typing.TypeVar("A", bound=Attachment)
-ATTACHMENT_TYPES: typing.Set[typing.Type[Attachment]] = set()
-ATTACHMENT_TYPE_ANNOTATION = re.compile(r"([a-zA-Z\.\_]+)(?:\[(.*)\])?")
+ATTACHMENT_TYPES: set[type[Attachment]] = set()
 
 
-def attachment(attachment_class: typing.Type[A]) -> typing.Type[A]:
+def attachment(attachment_class: type[A]) -> type[A]:
     """
     Use this decorator to register a new attachment type.  This type can then
     be used on any entity attribute and will automatically be built when the
