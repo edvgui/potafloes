@@ -68,13 +68,6 @@ class Context:
 
         self._initialized = True
 
-        # Then, we make sure that the domain is frozen
-        from potafloes import entity, entity_domain
-
-        for entity_type in entity.EntityType._entities:
-            ed = entity_domain.EntityDomain[object].get(entity_type=entity_type)
-            ed.freeze()
-
         # Finally, we setup the exception handler for our loop
         def handle_exception(loop: asyncio.AbstractEventLoop, context: dict) -> None:
             msg = context.get("exception", context["message"])
@@ -107,10 +100,10 @@ class Context:
         self._frozen = True
 
         # Then we freeze all the entity context related to this context
-        from potafloes import entity, entity_context
+        from potafloes import entity_context, entity_type
 
-        for e in entity.EntityType._entities:
-            ec = entity_context.EntityContext[object].get(entity_type=e, context=self)
+        for et in entity_type.ENTITY_TYPES:
+            ec = entity_context.EntityContext[object].get(entity_type=et, context=self)
             ec.freeze()
 
     def stop(self, *, force: bool = False) -> asyncio.Future:
@@ -129,10 +122,10 @@ class Context:
         """
         Get all the instances of all the entities it can find, and delete them.
         """
-        from potafloes import entity, entity_context
+        from potafloes import entity_context, entity_type
 
-        for e in entity.EntityType._entities:
-            ec = entity_context.EntityContext[object].get(entity_type=e, context=self)
+        for et in entity_type.ENTITY_TYPES:
+            ec = entity_context.EntityContext[object].get(entity_type=et, context=self)
             ec.reset()
 
         self._finalizer = None

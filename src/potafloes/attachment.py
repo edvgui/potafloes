@@ -5,7 +5,7 @@ import dataclasses
 import logging
 import typing
 
-from potafloes import context, exceptions
+from potafloes import context, definition, exceptions
 
 X = typing.TypeVar("X")
 Y = typing.TypeVar("Y")
@@ -143,44 +143,41 @@ class Attachment(typing.Generic[X]):
 
 
 @dataclasses.dataclass
-class AttachmentReference(typing.Generic[X, Y]):
+class AttachmentDefinition(definition.Definition):
     """
     For internal use only.  Holds the information about the attachment that
     needs to be created when building the entity.
     """
 
-    bearer_class: type[Y]
-    placeholder: str
-    inner_type_expression: str | None
     outer_type: type[Attachment]
-    globals: dict
-    locals: dict
 
-    @property
-    def inner_type(self) -> typing.Type:
-        if self.inner_type_expression is None:
-            return type(None)
-        return eval(self.inner_type_expression, self.globals, self.locals)
+    def inner_type(self) -> type:
+        if not hasattr(self._type, "__args__"):
+            raise ValueError(f"Incomplete attachment type: {self.type_expression}")
 
-    def attachment(self, bearer: Y) -> Attachment[X]:
-        return self.outer_type(bearer, self.placeholder, self.inner_type)
+        return getattr(self._type, "__args__")[0]
 
-    def validate(self, attachment: object) -> Attachment[X]:
-        if not isinstance(attachment, self.outer_type):
+    def attachment(self, bearer: object) -> Attachment:
+        inner_type = self.inner_type()
+        return self.outer_type(bearer, self.placeholder, inner_type)
+
+    def validate(self, attribute: object) -> object:
+        if not isinstance(attribute, self.outer_type):
             raise ValueError(
                 f"Unexpected type for {self.placeholder}: "
                 f"{type(attachment)} (expected {self.outer_type})"
             )
 
-        if not isinstance(self.inner_type, typing.ForwardRef) and not issubclass(
-            attachment._object_type, self.inner_type
+        inner_type = self.inner_type()
+        if not isinstance(inner_type, typing.ForwardRef) and not issubclass(
+            attribute._object_type, inner_type
         ):
             raise ValueError(
                 f"Unexpected inner type for {self.placeholder}: "
-                f"{type(attachment._object_type)} (expected {self.inner_type})"
+                f"{type(attribute._object_type)} (expected {inner_type})"
             )
 
-        return attachment
+        return attribute
 
 
 A = typing.TypeVar("A", bound=Attachment)

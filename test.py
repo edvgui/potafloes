@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 from potafloes.attachments import bag
 from potafloes.context import Context
-from potafloes.entity import Entity, implementation, index
+from potafloes.entity import Entity, implementation, exchange
+from potafloes.entity_type import index
 
 
 class Person(Entity):
@@ -24,12 +26,18 @@ class Person(Entity):
         return f"Person(name={self.name})"
 
 
+class Test(Person):
+    pass
+
+
+@implementation(Test)
 @implementation(Person)
 async def handle_children(person: Person) -> None:
     print(f"Dealing with children of {person}")
     person.children.subscribe(callback=person.praise_child)
 
 
+@implementation(Test)
 @implementation(Person)
 async def handle_parents(person: Person) -> None:
     print(f"Dealing with parents of {person}")
@@ -39,7 +47,7 @@ async def handle_parents(person: Person) -> None:
     person.parents.subscribe(callback=praise_parent)
 
 
-logging.basicConfig(level=logging.DEBUG)
+Person.parents < exchange() > Person.children  # TODO support inheritance
 
 
 async def main() -> None:
@@ -50,7 +58,8 @@ async def main() -> None:
     marilyn = Person(name="marilyn", likes_dogs=False)
 
     marilyn.parents += bob
-    bob.children += marilyn
+
+    alice = Test(name="alice", likes_dogs=False, parents=marilyn.parents)
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
     print(bob == bob_2)
@@ -60,3 +69,5 @@ async def main() -> None:
 Context().run(main)
 Context().reset()
 Context().run(main)
+
+print(Person.children)
