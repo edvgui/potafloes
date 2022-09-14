@@ -28,6 +28,27 @@ def implementation(entity_type: type[E]):
     return register_implementation
 
 
+def double_bind(
+    a: attachment.AttachmentDefinition, b: attachment.AttachmentDefinition
+) -> None:
+    def balance_factory(
+        this_side: attachment.AttachmentDefinition,
+        other_side: attachment.AttachmentDefinition,
+    ) -> typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]:
+        async def balance(this_obj: object) -> None:
+            async def add_to_other_side(other_obj: object) -> None:
+                attached = getattr(other_obj, other_side.placeholder)
+                attached.send(this_obj)
+
+            attached = getattr(this_obj, this_side.placeholder)
+            attached.subscribe(callback=add_to_other_side)
+
+        return balance
+
+    implementation(a.bearer_class)(balance_factory(a, b))
+    implementation(b.bearer_class)(balance_factory(b, a))
+
+
 class AttachmentExchanger:
     def __init__(self) -> None:
         self.attachment_a: attachment.AttachmentDefinition | None = None
@@ -46,31 +67,27 @@ class AttachmentExchanger:
 
         self.attachment_b = other
 
-        def balance_factory(
-            this_side: attachment.AttachmentDefinition,
-            other_side: attachment.AttachmentDefinition,
-        ) -> typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]:
-            async def balance(this_obj: object) -> None:
-                async def add_to_other_side(other_obj: object) -> None:
-                    attached = getattr(other_obj, other_side.placeholder)
-                    attached.send(this_obj)
-
-                attached = getattr(this_obj, this_side.placeholder)
-                attached.subscribe(callback=add_to_other_side)
-
-            return balance
-
-        implementation(self.attachment_a.bearer_class)(
-            balance_factory(self.attachment_a, self.attachment_b)
-        )
-        implementation(self.attachment_b.bearer_class)(
-            balance_factory(self.attachment_b, self.attachment_a)
-        )
+        double_bind(self.attachment_a, self.attachment_b)
 
         return None
 
 
 exchange = AttachmentExchanger
+"""
+This is a "syntactic sugar" to create a double bind.
+Instead of doing
+
+    ..code-block::
+
+        double_bind(A.bs, B.as)
+
+You can now do
+
+    ..code-block::
+
+        A.bs < exchange() > B.as
+
+"""
 
 
 class Entity(metaclass=entity_type.EntityType):
@@ -116,7 +133,7 @@ class Entity(metaclass=entity_type.EntityType):
     def __str__(self) -> str:
         queries = [
             f"{index.__name__}={repr(index(self))}"
-            for index in type(self)._load_indices().values()
+            for index in type(self)._indices().values()
         ]
         return f"{type(self).__name__}[{', '.join(queries)}]"
 
@@ -127,7 +144,7 @@ class Entity(metaclass=entity_type.EntityType):
         the set of values it is expected to return.  Those queries can only be made
         in a context where event loop is running or has run.
         """
-        if index not in cls._load_indices().values():
+        if index not in cls._indices().values():
             raise ValueError(
                 f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}"
             )

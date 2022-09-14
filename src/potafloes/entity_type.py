@@ -17,6 +17,9 @@ TYPE_ANNOTATION_EXPRESSION = re.compile(
     r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?"
 )
 
+Index = typing.Callable[[object], object]
+Implementation = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
+
 
 def index(func: typing.Callable[[object], X]) -> typing.Callable[[object], X]:
     """
@@ -57,12 +60,20 @@ class EntityTypeAnnotation:
         :raise ValueError: If the type annotation is not valid.
         :raise NameError: If the type annotation can not be resolved.
         """
+        if hasattr(self, "_base_type_result"):
+            return getattr(self, "_base_type_result")
+
         type_expression = TYPE_ANNOTATION_EXPRESSION.match(self.annotation)
         if not type_expression:
             raise ValueError(f"{repr(self.annotation)} is not a valid type annotation")
 
         # Try to evaluate base type, raise a NameError if the type can not be resolved
-        return eval(type_expression.group(1), self.globals, self.locals)
+        setattr(
+            self,
+            "_base_type_result",
+            eval(type_expression.group(1), self.globals, self.locals),
+        )
+        return getattr(self, "_base_type_result")
 
     def __str__(self) -> str:
         return (
@@ -81,33 +92,13 @@ class EntityType(type):
         cls.name = name
         cls.logger = logging.getLogger(f"type({name})")
 
-        cls._annotations: dict[str, EntityTypeAnnotation] | None = None
-        cls._indices: dict[str, typing.Callable[[object], object]] | None = None
-        cls._load_indices()
+        cls.__indices: dict[str, Index] | None = None
+        cls.__annotations: dict[str, EntityTypeAnnotation] | None = None
+        cls.__attachments: dict[str, attachment.AttachmentDefinition] | None = None
+        cls.__attributes: dict[str, attribute.AttributeDefinition] | None = None
+        cls.__implementations: list[Implementation] | None = None
 
-        cls._attachments: dict[str, attachment.AttachmentDefinition] = dict()
-        cls._attributes: dict[str, attribute.AttributeDefinition] = dict()
-
-        # Iterate over all the annotations of the class, and add them to the appropriate
-        # dict, attributes or attachments
-        for name, entity_annotation in cls._load_annotations().items():
-            try:
-                _type = entity_annotation.base_type()
-            except NameError:
-                # The type will be considered not to be an attachment
-                cls._add_attribute(entity_annotation)
-                continue
-
-            if _type not in attachment.ATTACHMENT_TYPES:
-                # The type is not an attachment, this is a simple attribute
-                cls._add_attribute(entity_annotation)
-                continue
-
-            cls._add_attachment(entity_annotation, attachment_type=_type)
-
-        cls._implementations: list[
-            typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
-        ] = list()
+        cls.__registered_implementations: list[Implementation] = list()
 
     def __call__(cls, *args, **kwds: object) -> object:
         # We don't support non-positional arguments
@@ -122,15 +113,15 @@ class EntityType(type):
         to_be_bound: dict[str, attachment.Attachment] = dict()
 
         for arg, value in kwds.items():
-            if arg in cls._attributes:
+            if arg in cls._attributes():
                 # This is an attribute, we simply validate its type
-                kwargs[arg] = cls._attributes[arg].validate(value)
+                kwargs[arg] = cls._attributes()[arg].validate(value)
                 continue
 
-            if arg in cls._attachments:
+            if arg in cls._attachments():
                 # This is an attachment, if we have a value here, we need to replace it
                 # and double-bind it with its replacement
-                cls._attachments[arg].validate(value)
+                cls._attachments()[arg].validate(value)
                 assert isinstance(value, attachment.Attachment)
                 to_be_bound[value._placeholder] = value
                 continue
@@ -146,7 +137,7 @@ class EntityType(type):
         # Get the entity context object for this type
         ec = entity_context.EntityContext[object].get(entity_type=cls)
 
-        for index in cls._load_indices().values():
+        for index in cls._indices().values():
             try:
                 instance = ec.find_instance(query=index, result=index(new_object))
                 # This is a match, before returning the object, we should make sure that all our input
@@ -175,7 +166,7 @@ class EntityType(type):
 
         # Once the object is created, with all the attributes, we also attach the attachment
         # objects.
-        for placeholder, definition in cls._attachments.items():
+        for placeholder, definition in cls._attachments().items():
             new_attachment = definition.attachment(new_object)
             object.__setattr__(new_object, placeholder, new_attachment)
 
@@ -187,7 +178,7 @@ class EntityType(type):
                 new_attachment.subscribe(attachment=arg_attachment)
 
         # Trigger all the implementations for this newly created object
-        for callback in cls._implementations:
+        for callback in cls._implementations():
             name = f"{callback}({new_object})"
             cls.logger.debug(
                 "Trigger implementation %s (%s)",
@@ -213,11 +204,11 @@ class EntityType(type):
         attachment/attribute definition if one can be found.  Otherwise we default to the superclass
         method.
         """
-        if __name in cls._attachments:
-            return cls._attachments[__name]
+        if __name in cls._attachments():
+            return cls._attachments()[__name]
 
-        if __name in cls._attributes:
-            return cls._attributes[__name]
+        if __name in cls._attributes():
+            return cls._attributes()[__name]
 
         return super().__getattr__(__name)  # type: ignore
 
@@ -239,42 +230,51 @@ class EntityType(type):
 
             yield base
 
-    def _load_indices(cls) -> dict[str, typing.Callable[[object], object]]:
+    def _indices(cls) -> dict[str, Index]:
         """
         Get all the indices defined for this entity type.  Returns them as a generator,
         this also go through the base classes indices.
         Indices from the base classes are returned first.
         """
-        if cls._indices is not None:
-            return cls._indices
+        if cls.__indices is not None:
+            return cls.__indices
 
-        cls._indices = dict()
+        def add_index(indices: dict[str, Index], index: Index) -> None:
+            """
+            Add the provided index to the indices dict.  If an index with the same name is already
+            present, log a warning and replace it.
+            """
+            if index.__name__ in indices:
+                cls.logger.warning(
+                    f"{index.__name__} is defined in {indices[index.__name__]} "
+                    f" and {index}, the later will overwrite the former."
+                )
+
+            indices[index.__name__] = index
+
+        cls.__indices = dict()
 
         for base in cls._bases():
             cls.logger.debug(f"Subclass of {base.__name__}, reusing it's indices.")
-            for entity_annotation in base._load_indices().values():
-                cls._add_index(entity_annotation)
+            for entity_annotation in base._indices().values():
+                add_index(cls.__indices, entity_annotation)
 
         for _, method in cls.__dict__.items():
             if hasattr(method, INDEX_MARKER):
                 # This is an index
-                cls._add_index(method)
+                add_index(cls.__indices, method)
 
-        return cls._indices
+        return cls.__indices
 
-    def _load_annotations(cls) -> dict[str, EntityTypeAnnotation]:
+    def _annotations(cls) -> dict[str, EntityTypeAnnotation]:
         """
-        Get all the annotations for this entity type.
+        Get all the annotations for this entity type.  The computation is done lazily and
+        cached.
         """
-        if cls._annotations is not None:
-            return cls._annotations
+        if cls.__annotations is not None:
+            return cls.__annotations
 
-        cls._annotations = dict()
-
-        for base in cls._bases():
-            cls.logger.debug(f"Subclass of {base.__name__}, reusing it's annotations.")
-            for entity_annotation in base._load_annotations().values():
-                cls._add_annotation(entity_annotation)
+        cls.__annotations = dict()
 
         cls.logger.debug(f"Reading annotations for {cls.name}")
         globals = getattr(sys.modules.get(cls.__module__, None), "__dict__", {})
@@ -296,97 +296,183 @@ class EntityType(type):
                 globals=globals,
                 locals=locals,
             )
-            cls._add_annotation(entity_annotation)
 
-        return cls._annotations
+            if entity_annotation.attribute in cls.__annotations:
+                cls.logger.warning(
+                    f"{entity_annotation.attribute} is defined in {cls.__annotations[entity_annotation.attribute]} "
+                    f"and {entity_annotation}, the later will overwrite the former."
+                )
 
-    def _add_index(cls, index: typing.Callable[[object], object]) -> None:
+            cls.__annotations[entity_annotation.attribute] = entity_annotation
+
+        return cls.__annotations
+
+    def _attachments(cls) -> dict[str, attachment.AttachmentDefinition]:
         """
-        Add the provided index to the indices dict.  If an index with the same name is already
-        present, log a warning and replace it.
+        Return all the attachments for this type.  The computation of the attachments
+        is done lazily and cached.
+        The dict of attachments also contains the attachments from the parents.
         """
-        if cls._indices is None:
-            raise ValueError(f"Can not register {cls.name} index, indices dict is None")
+        if cls.__attachments is not None:
+            return cls.__attachments
 
-        if index.__name__ in cls._indices:
-            cls.logger.warning(
-                f"{index.__name__} is defined in {cls._indices[index.__name__]} "
-                f" and {index}, the later will overwrite the former."
+        def add_attachment(
+            attachments: dict[str, attachment.AttachmentDefinition],
+            a: attachment.AttachmentDefinition,
+        ) -> None:
+            if a.placeholder not in attachments:
+                attachments[a.placeholder] = a
+                return
+
+            # We already have an attachment with that name, we only overwrite it
+            # if we can.
+            # The attachment can be overwritten if the type of the new attachment
+            # is a subclass of the type of the old attachment
+            existing_attachment = attachments[a.placeholder]
+            if not issubclass(a.outer_type, existing_attachment.outer_type):
+                raise ValueError(
+                    f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type."
+                )
+
+            try:
+                if not issubclass(a.inner_type(), existing_attachment.inner_type()):
+                    raise ValueError(
+                        f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type."
+                    )
+            except NameError:
+                # We get a name error when inner type can not be resolved yet
+                # We will simply assume the inner type is set correctly
+                cls.logger.warning(
+                    f"Can not verify type consistency between {existing_attachment} and {a}"
+                )
+
+            cls.logger.debug(f"Overwriting attachment {existing_attachment} with {a}")
+            attachments[a.placeholder] = a
+
+        cls.__attachments = dict()
+
+        for base in cls._bases():
+            for a in base._attachments().values():
+                add_attachment(cls.__attachments, a)
+
+        for entity_annotation in cls._annotations().values():
+            try:
+                _type = entity_annotation.base_type()
+            except NameError:
+                # The type will be considered not to be an attachment
+                continue
+
+            if _type not in attachment.ATTACHMENT_TYPES:
+                # The type is not an attachment, this is a simple attribute
+                continue
+
+            add_attachment(
+                cls.__attachments,
+                attachment.AttachmentDefinition(
+                    bearer_class=cls,
+                    placeholder=entity_annotation.attribute,
+                    type_expression=entity_annotation.annotation,
+                    outer_type=_type,
+                    globals=entity_annotation.globals,
+                    locals=entity_annotation.locals,
+                ),
             )
 
-        cls._indices[index.__name__] = index
+        return cls.__attachments
 
-    def _add_annotation(cls, entity_annotation: EntityTypeAnnotation) -> None:
+    def _attributes(cls) -> dict[str, attribute.AttributeDefinition]:
         """
-        Add the provided annotation to the annotations dict.  If an annotation with the same
-        name is already present, log a warning and replace it.
+        Return all the attributes for this type.  The computation of the attributes
+        is done lazily and cached.
+        The dict of attributes also contains the attributes from the parents.
         """
-        if cls._annotations is None:
-            raise ValueError(
-                f"Can not register {cls.name} annotation, annotations dict is None"
-            )
+        if cls.__attributes is not None:
+            return cls.__attributes
 
-        if entity_annotation.attribute in cls._annotations:
-            cls.logger.warning(
-                f"{entity_annotation.attribute} is defined in {cls._annotations[entity_annotation.attribute]} "
-                f"and {entity_annotation}, the later will overwrite the former."
-            )
+        def add_attribute(
+            attributes: dict[str, attribute.AttributeDefinition],
+            a: attribute.AttributeDefinition,
+        ) -> None:
+            if a.placeholder not in attributes:
+                attributes[a.placeholder] = a
+                return
 
-        cls._annotations[entity_annotation.attribute] = entity_annotation
+            # We already have an attribute with that name, we only overwrite it
+            # if we can.
+            # The attribute can be overwritten if the type of the new attribute
+            # is a subclass of the type of the old attachment
+            existing_attribute = attributes[a.placeholder]
+            try:
+                if not issubclass(a._type, existing_attribute._type):
+                    raise ValueError(
+                        f"Can not overwrite {existing_attribute} with {a}: inconsistent attachment type."
+                    )
+            except NameError:
+                cls.logger.warning(
+                    f"Can not verify type consistency between {existing_attribute} and {a}"
+                )
 
-    def _add_attachment(
-        cls,
-        entity_annotation: EntityTypeAnnotation,
-        *,
-        attachment_type: type[attachment.Attachment],
-    ) -> None:
+            cls.logger.debug(f"Overwriting attribute {existing_attribute} with {a}")
+            attributes[a.placeholder] = a
+
+        cls.__attributes = dict()
+
+        for base in cls._bases():
+            for a in base._attributes().values():
+                add_attribute(cls.__attributes, a)
+
+        for entity_annotation in cls._annotations().values():
+            try:
+                _type = entity_annotation.base_type()
+            except NameError:
+                # The type will be considered not to be an attachment
+                add_attribute(
+                    cls.__attributes,
+                    attribute.AttributeDefinition(
+                        bearer_class=cls,
+                        placeholder=entity_annotation.attribute,
+                        type_expression=entity_annotation.annotation,
+                        globals=entity_annotation.globals,
+                        locals=entity_annotation.locals,
+                        default=getattr(cls, entity_annotation.attribute, None),
+                    ),
+                )
+                continue
+
+            if _type not in attachment.ATTACHMENT_TYPES:
+                # The type is not an attachment, this is a simple attribute
+                add_attribute(
+                    cls.__attributes,
+                    attribute.AttributeDefinition(
+                        bearer_class=cls,
+                        placeholder=entity_annotation.attribute,
+                        type_expression=entity_annotation.annotation,
+                        globals=entity_annotation.globals,
+                        locals=entity_annotation.locals,
+                        default=getattr(cls, entity_annotation.attribute, None),
+                    ),
+                )
+                continue
+
+        return cls.__attributes
+
+    def _implementations(cls) -> list[Implementation]:
         """
-        Add the provided attachment to the attachments dict.  If an attachment with the same name
-        is already present, raise an exception.
-
-        :raise ValueError: When an attachment with the same name already exists.
+        Aggregate all the implementations for this type into a list and cache it.
+        This will take into account all the implementation defined on this specific type
+        and all the once defined on any of its base classes.
         """
-        if entity_annotation.attribute in cls._attachments:
-            raise ValueError(
-                f"There is already an attachment {entity_annotation.attribute} in {cls.name}.  "
-                f"New {entity_annotation} conflicts with existing {cls._attachments[entity_annotation.attribute]}."
-            )
+        if cls.__implementations is not None:
+            return cls.__implementations
 
-        if hasattr(cls, entity_annotation.attribute):
-            raise ValueError(
-                f"Invalid value for {entity_annotation}, defaults are not allowed for attachments."
-            )
+        cls.__implementations = list()
 
-        cls._attachments[entity_annotation.attribute] = attachment.AttachmentDefinition(
-            bearer_class=cls,
-            placeholder=entity_annotation.attribute,
-            type_expression=entity_annotation.annotation,
-            outer_type=attachment_type,
-            globals=entity_annotation.globals,
-            locals=entity_annotation.locals,
-        )
+        for base in cls._bases():
+            cls.__implementations.extend(base._implementations())
 
-    def _add_attribute(cls, entity_annotation: EntityTypeAnnotation) -> None:
-        """
-        Add the provided attribute to the attributes dict.  If an attribute with the same name
-        is already present, raise an exception.
+        cls.__implementations.extend(cls.__registered_implementations)
 
-        :raise ValueError: When an attribute with the same name already exists.
-        """
-        if entity_annotation.attribute in cls._attributes:
-            raise ValueError(
-                f"There is already an attribute {entity_annotation.attribute} in {cls.name}.  "
-                f"New {entity_annotation} conflicts with existing {cls._attributes[entity_annotation.attribute]}."
-            )
-
-        cls._attributes[entity_annotation.attribute] = attribute.AttributeDefinition(
-            bearer_class=cls,
-            placeholder=entity_annotation.attribute,
-            type_expression=entity_annotation.annotation,
-            globals=entity_annotation.globals,
-            locals=entity_annotation.locals,
-            default=getattr(cls, entity_annotation.attribute, None),
-        )
+        return cls.__implementations
 
     def _add_implementation(
         cls,
@@ -395,4 +481,4 @@ class EntityType(type):
         ],
     ) -> None:
         cls.logger.debug(f"Add implementation {implementation} to {cls}")
-        cls._implementations.append(implementation)
+        cls.__registered_implementations.append(implementation)
