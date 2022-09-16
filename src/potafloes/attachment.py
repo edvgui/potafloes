@@ -31,14 +31,10 @@ class Attachment(typing.Generic[X]):
         self._placeholder = placeholder
         self._object_type = object_type
 
-        self._callbacks: list[
-            typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
-        ] = []
+        self._callbacks: list[typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]] = []
 
         self._context = context.Context()
-        self._logger = logging.getLogger(
-            f"{type(self).__name__}@{self._bearer}.{self._placeholder}"
-        )
+        self._logger = logging.getLogger(f"{type(self).__name__}@{self._bearer}.{self._placeholder}")
 
     def _trigger_callback(
         self,
@@ -103,9 +99,7 @@ class Attachment(typing.Generic[X]):
             callback = cb
 
         if callback is None:
-            raise ValueError(
-                "At least one of attachment or callback attribute should be set."
-            )
+            raise ValueError("At least one of attachment or callback attribute should be set.")
 
         self._callbacks.append(callback)
         for item in self._all():
@@ -163,18 +157,12 @@ class AttachmentDefinition(definition.Definition):
 
     def validate(self, attribute: object) -> object:
         if not isinstance(attribute, self.outer_type):
-            raise ValueError(
-                f"Unexpected type for {self.placeholder}: "
-                f"{type(attachment)} (expected {self.outer_type})"
-            )
+            raise ValueError(f"Unexpected type for {self.placeholder}: " f"{type(attribute)} (expected {self.outer_type})")
 
         inner_type = self.inner_type()
-        if not isinstance(inner_type, typing.ForwardRef) and not issubclass(
-            attribute._object_type, inner_type
-        ):
+        if not isinstance(inner_type, typing.ForwardRef) and not issubclass(attribute._object_type, inner_type):
             raise ValueError(
-                f"Unexpected inner type for {self.placeholder}: "
-                f"{type(attribute._object_type)} (expected {inner_type})"
+                f"Unexpected inner type for {self.placeholder}: " f"{type(attribute._object_type)} (expected {inner_type})"
             )
 
         return attribute

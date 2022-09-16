@@ -28,9 +28,7 @@ class Single(attachment.Attachment[X]):
 
         if self._completed.done():
             # The insert method can only be called once
-            raise exceptions.DoubleSetException(
-                self._bearer, self._bearer, self._placeholder, None
-            )  # TODO
+            raise exceptions.DoubleSetException(self._bearer, self._bearer, self._placeholder, None)  # TODO
 
         self._completed.set_result(item)
         return True

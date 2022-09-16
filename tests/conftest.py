@@ -1,6 +1,7 @@
-import typing
-import pytest
 import importlib
+import typing
+
+import pytest
 
 import potafloes
 

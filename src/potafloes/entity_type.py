@@ -13,9 +13,7 @@ X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
 DOUBLE_BIND_MARKER = "double_bind"
 ENTITY_TYPES: set[EntityType] = set()
-TYPE_ANNOTATION_EXPRESSION = re.compile(
-    r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?"
-)
+TYPE_ANNOTATION_EXPRESSION = re.compile(r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?")
 NO_DEFAULT = object()
 
 Index = typing.Callable[[object], object]
@@ -77,10 +75,7 @@ class EntityTypeAnnotation:
         return getattr(self, "_base_type_result")
 
     def __str__(self) -> str:
-        return (
-            ".".join([self.module_name, self.class_name, self.attribute])
-            + f": {self.annotation}"
-        )
+        return ".".join([self.module_name, self.class_name, self.attribute]) + f": {self.annotation}"
 
 
 class EntityType(type):
@@ -128,16 +123,11 @@ class EntityType(type):
                 to_be_bound[value._placeholder] = value
                 continue
 
-            raise ValueError(
-                f"Unknown attribute passed to constructor: {cls.name} "
-                f"doesn't have any attribute named {arg}"
-            )
+            raise ValueError(f"Unknown attribute passed to constructor: {cls.name} " f"doesn't have any attribute named {arg}")
 
         missing_attributes = cls._required_attributes().keys() - kwargs.keys()
         if missing_attributes:
-            raise ValueError(
-                f"The constructor is missing some parameters: {missing_attributes}"
-            )
+            raise ValueError(f"The constructor is missing some parameters: {missing_attributes}")
 
         # Build a new object, we take care later of checking whether it should be emitted or not
         new_object = super().__call__(**kwargs)
@@ -155,16 +145,12 @@ class EntityType(type):
                     if instance_value == value:
                         continue
 
-                    raise exceptions.DoubleSetException(
-                        new_object, instance, key, index
-                    )
+                    raise exceptions.DoubleSetException(new_object, instance, key, index)
 
                 # If any attachment was provided in input, we need to double bind it with our
                 # existing attachment in the current instance
                 for a in to_be_bound.values():
-                    current_attachment: attachment.Attachment = getattr(
-                        instance, a._placeholder
-                    )
+                    current_attachment: attachment.Attachment = getattr(instance, a._placeholder)
                     a.subscribe(attachment=current_attachment)
                     current_attachment.subscribe(attachment=a)
 
@@ -232,9 +218,7 @@ class EntityType(type):
                 continue
 
             if type(base) is not EntityType:
-                raise ValueError(
-                    f"Entity type {cls.name} extends {base.__name__}, this is forbidden."
-                )
+                raise ValueError(f"Entity type {cls.name} extends {base.__name__}, this is forbidden.")
 
             yield base
 
@@ -292,9 +276,7 @@ class EntityType(type):
         for name, value in ann.items():
             cls.logger.debug(f"{cls.name}.{name}: {repr(value)} ({type(value)})")
             if not isinstance(value, str):
-                raise ValueError(
-                    f"Type {type(value)} is not a valid type annotation, expected str."
-                )
+                raise ValueError(f"Type {type(value)} is not a valid type annotation, expected str.")
 
             entity_annotation = EntityTypeAnnotation(
                 class_name=cls.__name__,
@@ -338,21 +320,15 @@ class EntityType(type):
             # is a subclass of the type of the old attachment
             existing_attachment = attachments[a.placeholder]
             if not issubclass(a.outer_type, existing_attachment.outer_type):
-                raise ValueError(
-                    f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type."
-                )
+                raise ValueError(f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type.")
 
             try:
                 if not issubclass(a.inner_type(), existing_attachment.inner_type()):
-                    raise ValueError(
-                        f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type."
-                    )
+                    raise ValueError(f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type.")
             except NameError:
                 # We get a name error when inner type can not be resolved yet
                 # We will simply assume the inner type is set correctly
-                cls.logger.warning(
-                    f"Can not verify type consistency between {existing_attachment} and {a}"
-                )
+                cls.logger.warning(f"Can not verify type consistency between {existing_attachment} and {a}")
 
             cls.logger.debug(f"Overwriting attachment {existing_attachment} with {a}")
             attachments[a.placeholder] = a
@@ -412,13 +388,9 @@ class EntityType(type):
             existing_attribute = attributes[a.placeholder]
             try:
                 if not issubclass(a._type, existing_attribute._type):
-                    raise ValueError(
-                        f"Can not overwrite {existing_attribute} with {a}: inconsistent attachment type."
-                    )
+                    raise ValueError(f"Can not overwrite {existing_attribute} with {a}: inconsistent attachment type.")
             except NameError:
-                cls.logger.warning(
-                    f"Can not verify type consistency between {existing_attribute} and {a}"
-                )
+                cls.logger.warning(f"Can not verify type consistency between {existing_attribute} and {a}")
 
             cls.logger.debug(f"Overwriting attribute {existing_attribute} with {a}")
             attributes[a.placeholder] = a
@@ -467,12 +439,8 @@ class EntityType(type):
     def _required_attributes(cls) -> dict[str, attribute.AttributeDefinition]:
         if cls.__required_attributes is not None:
             return cls.__required_attributes
-        
-        cls.__required_attributes = {
-            name: value
-            for name, value in cls._attributes().items()
-            if value.default is NO_DEFAULT
-        }
+
+        cls.__required_attributes = {name: value for name, value in cls._attributes().items() if value.default is NO_DEFAULT}
 
         return cls.__required_attributes
 
@@ -496,9 +464,7 @@ class EntityType(type):
 
     def _add_implementation(
         cls,
-        implementation: typing.Callable[
-            [X], typing.Coroutine[typing.Any, typing.Any, None]
-        ],
+        implementation: typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]],
     ) -> None:
         cls.logger.debug(f"Add implementation {implementation} to {cls}")
         cls.__registered_implementations.append(implementation)

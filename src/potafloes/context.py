@@ -62,9 +62,7 @@ class Context:
     def init(self) -> None:
         # First, we make sure that the context is not already initialized
         if self.initalized:
-            raise exceptions.ContextAlreadyInitializedException(
-                "This context is already initialized"
-            )
+            raise exceptions.ContextAlreadyInitializedException("This context is already initialized")
 
         self._initialized = True
 
@@ -93,9 +91,7 @@ class Context:
     def freeze(self) -> None:
         # First we make sure that this context is not frozen yet
         if self.frozen:
-            raise exceptions.ContextAlreadyFrozenException(
-                "This context is already frozen"
-            )
+            raise exceptions.ContextAlreadyFrozenException("This context is already frozen")
 
         self._frozen = True
 

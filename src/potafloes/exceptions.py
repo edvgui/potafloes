@@ -48,9 +48,7 @@ class DoubleSetException(BaseException):
     different attributes but matching index.
     """
 
-    def __init__(
-        self, a: "E", b: "E", attribute: str, index: Callable[["E"], X]
-    ) -> None:
+    def __init__(self, a: "E", b: "E", attribute: str, index: Callable[["E"], X]) -> None:
         self.entity_a = a
         self.value_a = getattr(a, attribute)
 
@@ -60,16 +58,10 @@ class DoubleSetException(BaseException):
         self.attribute = attribute
         self.index = index
 
-        super().__init__(
-            f"Value set twice: {self}.  Matching index: "
-            f"{type(a).__name__}.{index.__name__} = {index(a)}"
-        )
+        super().__init__(f"Value set twice: {self}.  Matching index: " f"{type(a).__name__}.{index.__name__} = {index(a)}")
 
     def __str__(self) -> str:
-        return (
-            f"{self.entity_a}.{self.attribute} != {self.entity_b}.{self.attribute} "
-            f"({self.value_a} != {self.value_b})"
-        )
+        return f"{self.entity_a}.{self.attribute} != {self.entity_b}.{self.attribute} " f"({self.value_a} != {self.value_b})"
 
 
 class AttachmentItemTypeException(TypeError, BaseException):
