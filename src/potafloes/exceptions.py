@@ -1,3 +1,6 @@
+"""
+Exceptions defined in this module are all part of the stable api
+"""
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
@@ -8,41 +11,41 @@ if TYPE_CHECKING:
 X = TypeVar("X")
 
 
-class OuatException(RuntimeError):
+class PotafloesException(RuntimeError):
     """
     Base class for all exceptions raised by this library.
     """
 
 
-class ContextAlreadyInitializedException(BaseException):
+class ContextAlreadyInitializedException(PotafloesException):
     """
     Exception raised when an attempts is made to initialize an already
     initialized context
     """
 
 
-class ContextAlreadyFrozenException(BaseException):
+class ContextAlreadyFrozenException(PotafloesException):
     """
     Exception raised when an attempts is made to freeze an already
     frozen context
     """
 
 
-class ContextModifiedAfterFreezeException(BaseException):
+class ContextModifiedAfterFreezeException(PotafloesException):
     """
     Exception raised when an attempt is made to modify an entity context
     object after it has been frozen.
     """
 
 
-class DomainModifiedAfterFreezeException(BaseException):
+class DomainModifiedAfterFreezeException(PotafloesException):
     """
     Exception raised when an attempt is made to modify an entity domain
     object after it has been frozen.
     """
 
 
-class DoubleSetException(BaseException):
+class DoubleSetException(ValueError, PotafloesException):
     """
     Exception raised when an entity is created twice with
     different attributes but matching index.
@@ -64,7 +67,7 @@ class DoubleSetException(BaseException):
         return f"{self.entity_a}.{self.attribute} != {self.entity_b}.{self.attribute} " f"({self.value_a} != {self.value_b})"
 
 
-class AttachmentItemTypeException(TypeError, BaseException):
+class AttachmentItemTypeException(TypeError, PotafloesException):
     """
     Exception raised when an item of the wrong type is added to a stream.
     """
