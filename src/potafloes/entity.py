@@ -95,12 +95,12 @@ class Entity(metaclass=entity_type.EntityType):
     This is the base class to any data part of the single state model.
     """
 
-    _context: context.Context
+    _context: context.Context = object()  # type: ignore
     """
     This value is set automatically when the instance is constructed
     """
 
-    _logger: logging.Logger
+    _logger: logging.Logger = object()  # type: ignore
     """
     This value is set automatically when the instance is constructed
     """

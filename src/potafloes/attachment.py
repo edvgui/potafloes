@@ -184,7 +184,7 @@ A = typing.TypeVar("A", bound=Attachment)
 ATTACHMENT_TYPES: set[type[Attachment]] = set()
 
 
-def attachment(attachment_class: type[A]) -> type[A]:
+def entity_attachment(attachment_class: type[A]) -> type[A]:
     """
     Use this decorator to register a new attachment type.  This type can then
     be used on any entity attribute and will automatically be built when the

@@ -16,6 +16,7 @@ ENTITY_TYPES: set[EntityType] = set()
 TYPE_ANNOTATION_EXPRESSION = re.compile(
     r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?"
 )
+NO_DEFAULT = object()
 
 Index = typing.Callable[[object], object]
 Implementation = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
@@ -96,6 +97,7 @@ class EntityType(type):
         cls.__annotations: dict[str, EntityTypeAnnotation] | None = None
         cls.__attachments: dict[str, attachment.AttachmentDefinition] | None = None
         cls.__attributes: dict[str, attribute.AttributeDefinition] | None = None
+        cls.__required_attributes: dict[str, attribute.AttributeDefinition] | None = None
         cls.__implementations: list[Implementation] | None = None
 
         cls.__registered_implementations: list[Implementation] = list()
@@ -129,6 +131,12 @@ class EntityType(type):
             raise ValueError(
                 f"Unknown attribute passed to constructor: {cls.name} "
                 f"doesn't have any attribute named {arg}"
+            )
+
+        missing_attributes = cls._required_attributes().keys() - kwargs.keys()
+        if missing_attributes:
+            raise ValueError(
+                f"The constructor is missing some parameters: {missing_attributes}"
             )
 
         # Build a new object, we take care later of checking whether it should be emitted or not
@@ -434,7 +442,7 @@ class EntityType(type):
                         type_expression=entity_annotation.annotation,
                         globals=entity_annotation.globals,
                         locals=entity_annotation.locals,
-                        default=getattr(cls, entity_annotation.attribute, None),
+                        default=getattr(cls, entity_annotation.attribute, NO_DEFAULT),
                     ),
                 )
                 continue
@@ -449,12 +457,24 @@ class EntityType(type):
                         type_expression=entity_annotation.annotation,
                         globals=entity_annotation.globals,
                         locals=entity_annotation.locals,
-                        default=getattr(cls, entity_annotation.attribute, None),
+                        default=getattr(cls, entity_annotation.attribute, NO_DEFAULT),
                     ),
                 )
                 continue
 
         return cls.__attributes
+
+    def _required_attributes(cls) -> dict[str, attribute.AttributeDefinition]:
+        if cls.__required_attributes is not None:
+            return cls.__required_attributes
+        
+        cls.__required_attributes = {
+            name: value
+            for name, value in cls._attributes().items()
+            if value.default is NO_DEFAULT
+        }
+
+        return cls.__required_attributes
 
     def _implementations(cls) -> list[Implementation]:
         """
