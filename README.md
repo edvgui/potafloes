@@ -1,2 +1,4 @@
-# ouat
-Library to build single state python data structure
+# Potafloes
+
+Dataflow library to build single state data structures.
+
