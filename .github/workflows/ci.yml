@@ -20,6 +20,10 @@ jobs:
           pip install -U pipenv
           pipenv install --dev
       - name: Lint with flake8
-        run: flake8 tests src
+        run: |
+          pipenv shell
+          flake8 tests src
       - name: Run tests
-        run: pytest
+        run: |
+          pipenv shell
+          pytest
