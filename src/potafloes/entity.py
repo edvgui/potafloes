@@ -12,25 +12,11 @@ DOUBLE_BIND_MARKER = "double_bind"
 TYPE_ANNOTATION_EXPRESSION = re.compile(r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?")
 
 
-def implementation(entity_type: type[E]):
-    """
-    Register a function that should be called for each instance of the specified entity type.
-    """
-
-    def register_implementation(
-        func: typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]
-    ) -> typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]:
-        entity_type._add_implementation(implementation=func)
-        return func
-
-    return register_implementation
-
-
 def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefinition) -> None:
     def balance_factory(
         this_side: attachment.AttachmentDefinition,
         other_side: attachment.AttachmentDefinition,
-    ) -> typing.Callable[[E], typing.Coroutine[typing.Any, typing.Any, None]]:
+    ) -> typing.Callable[[object], typing.Coroutine[typing.Any, typing.Any, None]]:
         async def balance(this_obj: object) -> None:
             async def add_to_other_side(other_obj: object) -> None:
                 attached = getattr(other_obj, other_side.placeholder)
@@ -41,8 +27,8 @@ def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefi
 
         return balance
 
-    implementation(a.bearer_class)(balance_factory(a, b))
-    implementation(b.bearer_class)(balance_factory(b, a))
+    entity_type.implementation(a.bearer_class)(balance_factory(a, b))
+    entity_type.implementation(b.bearer_class)(balance_factory(b, a))
 
 
 class AttachmentExchanger:
@@ -107,7 +93,7 @@ class Entity(metaclass=entity_type.EntityType):
     From that point, __setattr__ will raise an exception.
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: object) -> None:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -131,7 +117,7 @@ class Entity(metaclass=entity_type.EntityType):
         return f"{type(self).__name__}[{', '.join(queries)}]"
 
     @classmethod
-    async def get(cls: type[E], *, index=typing.Callable[[object], X], arg=X) -> E:
+    async def get(cls: type[E], *, index: typing.Callable[[E], X], arg: X) -> E:
         """
         Query an instance of the current type using one of its index function and
         the set of values it is expected to return.  Those queries can only be made

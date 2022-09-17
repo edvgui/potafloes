@@ -1,11 +1,12 @@
 """
 Exceptions defined in this module are all part of the stable api
 """
-from typing import TYPE_CHECKING, Callable, TypeVar
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
-    from potafloes.attachment import Attachment
-    from potafloes.entity import E
+    from potafloes import attachment
 
 
 X = TypeVar("X")
@@ -51,20 +52,16 @@ class DoubleSetException(ValueError, PotafloesException):
     different attributes but matching index.
     """
 
-    def __init__(self, a: "E", b: "E", attribute: str, index: Callable[["E"], X]) -> None:
-        self.entity_a = a
-        self.value_a = getattr(a, attribute)
-
-        self.entity_b = b
-        self.value_b = getattr(b, attribute)
-
+    def __init__(self, entity: object, attribute: str, value_a: object, value_b: object) -> None:
+        self.entity = entity
         self.attribute = attribute
-        self.index = index
+        self.value_a = value_a
+        self.value_b = value_b
 
-        super().__init__(f"Value set twice: {self}.  Matching index: " f"{type(a).__name__}.{index.__name__} = {index(a)}")
+        super().__init__(f"Value set twice: {self}.")
 
     def __str__(self) -> str:
-        return f"{self.entity_a}.{self.attribute} != {self.entity_b}.{self.attribute} " f"({self.value_a} != {self.value_b})"
+        return f"{self.entity}.{self.attribute}: {self.value_a} != {self.value_b}"
 
 
 class AttachmentItemTypeException(TypeError, PotafloesException):
@@ -72,7 +69,7 @@ class AttachmentItemTypeException(TypeError, PotafloesException):
     Exception raised when an item of the wrong type is added to a stream.
     """
 
-    def __init__(self, attachment: "Attachment[X]", item: object) -> None:
+    def __init__(self, attachment: attachment.Attachment[X], item: object) -> None:
         self.attachment = attachment
         self.item = item
 

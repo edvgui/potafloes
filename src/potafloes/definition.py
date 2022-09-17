@@ -3,6 +3,9 @@ from __future__ import annotations
 import dataclasses
 import typing
 
+if typing.TYPE_CHECKING:
+    from potafloes import entity_type
+
 X = typing.TypeVar("X")
 
 Callback = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
@@ -15,11 +18,11 @@ class Definition:
     needs to be created when building the entity.
     """
 
-    bearer_class: type
+    bearer_class: entity_type.EntityType
     placeholder: str
     type_expression: str
-    globals: dict
-    locals: dict
+    globals: dict[str, typing.Any]
+    locals: dict[str, object]
 
     @property
     def _type(self) -> type:
@@ -30,7 +33,9 @@ class Definition:
                 eval(self.type_expression, self.globals, self.locals),
             )
 
-        return getattr(self, "_type_result")
+        res = getattr(self, "_type_result")
+        assert isinstance(res, type), type(res)
+        return res
 
     def validate(self, attribute: object) -> object:
         attribute_type = self._type

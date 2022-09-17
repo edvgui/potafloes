@@ -3,10 +3,9 @@ import typing
 from potafloes import attachment
 
 X = typing.TypeVar("X")
-Y = typing.TypeVar("Y")
 
 
-@attachment.attachment
+@attachment.entity_attachment
 class Bag(attachment.Attachment[X]):
     """
     A bag object can be used to register callbacks, that will be called for
@@ -15,7 +14,7 @@ class Bag(attachment.Attachment[X]):
     never await for this to finish, it doesn't even have a notion of completion.
     """
 
-    def __init__(self, bearer: Y, placeholder: str, object_type: type[X]) -> None:
+    def __init__(self, bearer: object, placeholder: str, object_type: type[X]) -> None:
         """
         :param bearer: The object this bag is attached to.
         :param placeholder: The name of the object function this bag is a placeholder for.

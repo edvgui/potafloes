@@ -1,16 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 import typing
 
 from potafloes import attachment, exceptions
 
 X = typing.TypeVar("X")
-Y = typing.TypeVar("Y")
 
 
 class Single(attachment.Attachment[X]):
     def __init__(
         self,
-        bearer: Y,
+        bearer: object,
         placeholder: str,
         object_type: type[X],
         *,
@@ -18,17 +19,17 @@ class Single(attachment.Attachment[X]):
     ) -> None:
         super().__init__(bearer, placeholder, object_type)
         self._optional = optional
-        self._completed = asyncio.Future(loop=self._context.event_loop)
+        self._completed: asyncio.Future[X] = asyncio.Future(loop=self._context.event_loop)
 
-        self._context.register(self._completed)
+        self._context.register(self._completed)  # type: ignore
 
-    def _insert(self, item: X | None) -> bool:
+    def _insert(self, item: X) -> bool:
         if item is None and self._optional:
             raise ValueError(f"Can not assign None to non-optional attachment: {self}")
 
         if self._completed.done():
             # The insert method can only be called once
-            raise exceptions.DoubleSetException(self._bearer, self._bearer, self._placeholder, None)  # TODO
+            raise exceptions.DoubleSetException(self._bearer, self._placeholder, self._completed.result(), item)
 
         self._completed.set_result(item)
         return True

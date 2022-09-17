@@ -16,8 +16,20 @@ ENTITY_TYPES: set[EntityType] = set()
 TYPE_ANNOTATION_EXPRESSION = re.compile(r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?")
 NO_DEFAULT = object()
 
-Index = typing.Callable[[object], object]
+Index = typing.Callable[[X], object]
 Implementation = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
+
+
+def implementation(entity_type: EntityType) -> typing.Callable[[Implementation[object]], Implementation[object]]:
+    """
+    Register a function that should be called for each instance of the specified entity type.
+    """
+
+    def register_implementation(func: Implementation[object]) -> Implementation[object]:
+        entity_type._add_implementation(implementation=func)
+        return func
+
+    return register_implementation
 
 
 def index(func: typing.Callable[[object], X]) -> typing.Callable[[object], X]:
@@ -26,11 +38,12 @@ def index(func: typing.Callable[[object], X]) -> typing.Callable[[object], X]:
     """
     cached_result_attr = f"__{func.__name__}_index"
 
-    def index_or_cache(self) -> X:
+    def index_or_cache(self: object) -> X:
         if not hasattr(self, cached_result_attr):
             object.__setattr__(self, cached_result_attr, func(self))
 
-        return getattr(self, cached_result_attr)
+        res: X = getattr(self, cached_result_attr)
+        return res
 
     setattr(index_or_cache, INDEX_MARKER, True)
     index_or_cache.__name__ = func.__name__
@@ -48,8 +61,8 @@ class EntityTypeAnnotation:
     module_name: str
     attribute: str
     annotation: str
-    globals: dict
-    locals: dict
+    globals: dict[str, typing.Any]
+    locals: dict[str, object]
 
     def base_type(self) -> type:
         """
@@ -60,7 +73,8 @@ class EntityTypeAnnotation:
         :raise NameError: If the type annotation can not be resolved.
         """
         if hasattr(self, "_base_type_result"):
-            return getattr(self, "_base_type_result")
+            res: type = getattr(self, "_base_type_result")
+            return res
 
         type_expression = TYPE_ANNOTATION_EXPRESSION.match(self.annotation)
         if not type_expression:
@@ -72,14 +86,15 @@ class EntityTypeAnnotation:
             "_base_type_result",
             eval(type_expression.group(1), self.globals, self.locals),
         )
-        return getattr(self, "_base_type_result")
+        res = getattr(self, "_base_type_result")
+        return res
 
     def __str__(self) -> str:
         return ".".join([self.module_name, self.class_name, self.attribute]) + f": {self.annotation}"
 
 
 class EntityType(type):
-    def __init__(cls, name: str, __bases: tuple, __dict: dict, **kwds) -> None:
+    def __init__(cls, name: str, __bases: tuple[type, ...], __dict: dict[str, typing.Any], **kwds: typing.Any) -> None:
         super().__init__(name, __bases, __dict, **kwds)
 
         # Register the new entity type
@@ -88,16 +103,16 @@ class EntityType(type):
         cls.name = name
         cls.logger = logging.getLogger(f"type({name})")
 
-        cls.__indices: dict[str, Index] | None = None
+        cls.__indices: dict[str, Index[object]] | None = None
         cls.__annotations: dict[str, EntityTypeAnnotation] | None = None
         cls.__attachments: dict[str, attachment.AttachmentDefinition] | None = None
         cls.__attributes: dict[str, attribute.AttributeDefinition] | None = None
         cls.__required_attributes: dict[str, attribute.AttributeDefinition] | None = None
-        cls.__implementations: list[Implementation] | None = None
+        cls.__implementations: list[Implementation[object]] | None = None
 
-        cls.__registered_implementations: list[Implementation] = list()
+        cls.__registered_implementations: list[Implementation[object]] = list()
 
-    def __call__(cls, *args, **kwds: object) -> object:
+    def __call__(cls, *args: object, **kwds: object) -> object:
         # We don't support non-positional arguments
         if args:
             raise ValueError("Entity creation doesn't support positional arguments")
@@ -107,7 +122,7 @@ class EntityType(type):
         # each item, transforming them if required.
         kwargs: dict[str, object] = dict()
 
-        to_be_bound: dict[str, attachment.Attachment] = dict()
+        to_be_bound: dict[str, attachment.Attachment[object]] = dict()
 
         for arg, value in kwds.items():
             if arg in cls._attributes():
@@ -145,12 +160,12 @@ class EntityType(type):
                     if instance_value == value:
                         continue
 
-                    raise exceptions.DoubleSetException(new_object, instance, key, index)
+                    raise exceptions.DoubleSetException(instance, key, getattr(instance, key), value)
 
                 # If any attachment was provided in input, we need to double bind it with our
                 # existing attachment in the current instance
                 for a in to_be_bound.values():
-                    current_attachment: attachment.Attachment = getattr(instance, a._placeholder)
+                    current_attachment: attachment.Attachment[object] = getattr(instance, a._placeholder)
                     a.subscribe(attachment=current_attachment)
                     current_attachment.subscribe(attachment=a)
 
@@ -222,7 +237,7 @@ class EntityType(type):
 
             yield base
 
-    def _indices(cls) -> dict[str, Index]:
+    def _indices(cls) -> dict[str, Index[object]]:
         """
         Get all the indices defined for this entity type.  Returns them as a generator,
         this also go through the base classes indices.
@@ -231,7 +246,7 @@ class EntityType(type):
         if cls.__indices is not None:
             return cls.__indices
 
-        def add_index(indices: dict[str, Index], index: Index) -> None:
+        def add_index(indices: dict[str, Index[object]], index: Index[object]) -> None:
             """
             Add the provided index to the indices dict.  If an index with the same name is already
             present, log a warning and replace it.
@@ -444,7 +459,7 @@ class EntityType(type):
 
         return cls.__required_attributes
 
-    def _implementations(cls) -> list[Implementation]:
+    def _implementations(cls) -> list[Implementation[object]]:
         """
         Aggregate all the implementations for this type into a list and cache it.
         This will take into account all the implementation defined on this specific type
@@ -464,7 +479,7 @@ class EntityType(type):
 
     def _add_implementation(
         cls,
-        implementation: typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]],
+        implementation: Implementation[object],
     ) -> None:
         cls.logger.debug(f"Add implementation {implementation} to {cls}")
         cls.__registered_implementations.append(implementation)

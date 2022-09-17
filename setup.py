@@ -8,6 +8,7 @@ setup(
     long_description=pathlib.Path("README.md").read_text(),
     long_description_content_type="text/markdown",
     package_dir={"": "src"},
+    package_data={"potafloes": ["py.typed"]},
     packages=find_packages(where="src"),
     author="Guillaume Everarts de Velp",
     author_email="edvgui@gmail.com",

@@ -17,7 +17,7 @@ class EntityContext(typing.Generic[X]):
     in which its instances are created.
     """
 
-    __entity_contexts: dict[tuple[type, Context], EntityContext] = dict()
+    __entity_contexts: dict[tuple[X, Context], EntityContext[X]] = dict()
 
     def __init__(self, entity_type: type[X], context: Context) -> None:
         super().__init__()
@@ -25,7 +25,7 @@ class EntityContext(typing.Generic[X]):
         self.context = context
         self.logger = logging.getLogger(f"{entity_type.__name__}Context")
 
-        self._queries: dict[tuple[typing.Callable[[X], object], object], asyncio.Future] = dict()
+        self._queries: dict[tuple[typing.Callable[[X], object], object], asyncio.Future[X]] = dict()
         self._instances: set[X] = set()
 
         self._frozen = False
@@ -37,7 +37,7 @@ class EntityContext(typing.Generic[X]):
     @property
     def queries(
         self,
-    ) -> typing.Mapping[tuple[typing.Callable[[X], object], object], asyncio.Future]:
+    ) -> typing.Mapping[tuple[typing.Callable[[X], object], object], asyncio.Future[X]]:
         """
         Get the queries dict, as a frozen dict, it should not be tempered with.
         """
@@ -74,7 +74,7 @@ class EntityContext(typing.Generic[X]):
         for res in resolved:
             self._queries.pop(res)
 
-    def add_query(self, *, query=typing.Callable[[object], Y], result=Y) -> typing.Awaitable[X]:
+    def add_query(self, *, query: typing.Callable[[X], Y], result: Y) -> typing.Awaitable[X]:
         """
         Register a new query, every time a new instance is added, we will check if it matches
         the query.  If it does not check if any existing instance is already a match.  For this
@@ -91,7 +91,7 @@ class EntityContext(typing.Generic[X]):
         self._queries[identifier] = asyncio.Future(loop=self.context.event_loop)
         return self._queries[identifier]
 
-    def find_instance(self, *, query=typing.Callable[[object], Y], result=Y) -> X:
+    def find_instance(self, *, query: typing.Callable[[X], Y], result: Y) -> X:
         """
         Find an return the first instance with matching index.  The query will
         be called on each known instance, and if the result matches the provided
@@ -129,7 +129,7 @@ class EntityContext(typing.Generic[X]):
 
     @classmethod
     def get(
-        cls: type[EntityContext[X]],
+        cls,
         *,
         entity_type: type[X],
         context: Context | None = None,
@@ -142,8 +142,7 @@ class EntityContext(typing.Generic[X]):
             context = Context()
 
         identifier = (entity_type, context)
-        if identifier in cls.__entity_contexts:
-            return cls.__entity_contexts[identifier]
+        if identifier not in cls.__entity_contexts:
+            cls.__entity_contexts[identifier] = EntityContext(entity_type, context)
 
-        cls.__entity_contexts[identifier] = EntityContext(entity_type, context)
         return cls.__entity_contexts[identifier]

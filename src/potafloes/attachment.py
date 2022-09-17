@@ -8,7 +8,6 @@ import typing
 from potafloes import context, definition, exceptions
 
 X = typing.TypeVar("X")
-Y = typing.TypeVar("Y")
 
 Callback = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
 
@@ -34,7 +33,7 @@ class Attachment(typing.Generic[X]):
         self._callbacks: list[typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]] = []
 
         self._context = context.Context()
-        self._logger = logging.getLogger(f"{type(self).__name__}@{self._bearer}.{self._placeholder}")
+        self._logger = logging.getLogger(str(self))
 
     def _trigger_callback(
         self,
@@ -56,7 +55,7 @@ class Attachment(typing.Generic[X]):
         )
 
     @abc.abstractmethod
-    def _insert(self, item: X | None) -> bool:
+    def _insert(self, item: X) -> bool:
         """
         Insert this item into this attachment.  Returns True if the insertion
         was impacting for the attachment, False otherwise.
@@ -105,7 +104,7 @@ class Attachment(typing.Generic[X]):
         for item in self._all():
             self._trigger_callback(callback, item)
 
-    def send(self, __item: X | None) -> None:
+    def send(self, __item: X) -> None:
         """
         Send an item and assign it to this attachment
         """
@@ -129,11 +128,17 @@ class Attachment(typing.Generic[X]):
         an object, in which case we try to add it to the attachment.
         """
         if isinstance(other, Attachment):
-            other.subscribe(attachment=self)
+            if not issubclass(other._object_type, self._object_type):
+                raise ValueError(f"Can not add items of type {other._object_type} to {self}")
+
+            other.subscribe(attachment=self)  # type: ignore
             return self
 
         self.send(other)
         return self
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}[{self._object_type}]@{self._bearer}.{self._placeholder}"
 
 
 @dataclasses.dataclass
@@ -143,15 +148,17 @@ class AttachmentDefinition(definition.Definition):
     needs to be created when building the entity.
     """
 
-    outer_type: type[Attachment]
+    outer_type: type[Attachment[object]]
 
     def inner_type(self) -> type:
         if not hasattr(self._type, "__args__"):
             raise ValueError(f"Incomplete attachment type: {self.type_expression}")
 
-        return getattr(self._type, "__args__")[0]
+        res = getattr(self._type, "__args__")[0]
+        assert isinstance(res, type), type(res)
+        return res
 
-    def attachment(self, bearer: object) -> Attachment:
+    def attachment(self, bearer: object) -> Attachment[object]:
         inner_type = self.inner_type()
         return self.outer_type(bearer, self.placeholder, inner_type)
 
@@ -168,11 +175,12 @@ class AttachmentDefinition(definition.Definition):
         return attribute
 
 
-A = typing.TypeVar("A", bound=Attachment)
-ATTACHMENT_TYPES: set[type[Attachment]] = set()
+A = typing.TypeVar("A", bound=Attachment[object])
+Y = typing.TypeVar("Y", bound=object)
+ATTACHMENT_TYPES: set[type[Attachment[typing.Any]]] = set()
 
 
-def entity_attachment(attachment_class: type[A]) -> type[A]:
+def entity_attachment(attachment_class: type[Attachment[Y]]) -> type[Attachment[Y]]:
     """
     Use this decorator to register a new attachment type.  This type can then
     be used on any entity attribute and will automatically be built when the

@@ -23,26 +23,22 @@ class Context:
     __contexts: dict[str, Context] = {}
 
     def __new__(cls: type[Context]) -> Context:
-        new_instance = object.__new__(cls)
-        new_instance.__init__()
+        context_name = threading.current_thread().name
+        if context_name not in cls.__contexts:
+            cls.__contexts[context_name] = object.__new__(cls)
 
-        new_instance.logger.name = str(new_instance)
-
-        if new_instance.name not in cls.__contexts:
-            cls.__contexts[new_instance.name] = new_instance
-            new_instance.logger.debug("New context created")
-
-        return cls.__contexts[new_instance.name]
+        return cls.__contexts[context_name]
 
     def __init__(self) -> None:
         self.name = threading.current_thread().name
-        self.tasks: list[asyncio.Task] = []
+        self.tasks: list[asyncio.Task[object]] = []
 
         self._initialized: bool = False
         self._frozen: bool = False
-        self._finalizer: asyncio.Future | None = None
+        self._finalizer: asyncio.Future[list[object]] | None = None
 
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(str(self))
+        self.logger.debug("New context created")
 
     @property
     def initalized(self) -> bool:
@@ -56,7 +52,7 @@ class Context:
     def event_loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
 
-    def register(self, task: asyncio.Task) -> None:
+    def register(self, task: asyncio.Task[object]) -> None:
         self.tasks.append(task)
 
     def init(self) -> None:
@@ -67,14 +63,14 @@ class Context:
         self._initialized = True
 
         # Finally, we setup the exception handler for our loop
-        def handle_exception(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+        def handle_exception(loop: asyncio.AbstractEventLoop, context: dict[str, object]) -> None:
             msg = context.get("exception", context["message"])
             self.logger.error(f"Caught exception: {msg}")
             self.stop(force=True)
 
         self.event_loop.set_exception_handler(handle_exception)
 
-    def _finalizer_callback(self, finalizer: asyncio.Future) -> None:
+    def _finalizer_callback(self, finalizer: asyncio.Future[list[object]]) -> None:
         if self.tasks:
             # We still have some pending tasks
             self.finalize()
@@ -102,7 +98,7 @@ class Context:
             ec = entity_context.EntityContext[object].get(entity_type=et, context=self)
             ec.freeze()
 
-    def stop(self, *, force: bool = False) -> asyncio.Future:
+    def stop(self, *, force: bool = False) -> asyncio.Future[list[object]]:
         if force:
             self.logger.debug("Stopping loop")
             for task in self.tasks:

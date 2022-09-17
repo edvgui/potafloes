@@ -1,4 +1,4 @@
-name: Python package
+name: Integration tests
 
 on: [push]
 
@@ -22,6 +22,9 @@ jobs:
       - name: Lint with flake8
         run: |
           pipenv run flake8 tests src
+      - name: Run static typing check
+        run: |
+          pipenv run mypy src/potafloes
       - name: Run tests
         run: |
           pipenv run pytest

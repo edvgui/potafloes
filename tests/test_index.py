@@ -43,7 +43,13 @@ def test_double_set(
 
     async def main() -> None:
         Person(name="bob", age=50)
-        with pytest.raises(potafloes.exceptions.DoubleSetException):
+        with pytest.raises(potafloes.exceptions.DoubleSetException) as exc_info:
             Person(name="bob", age=51)
+
+        exc = exc_info.value
+        assert exc.attribute == "age"
+        assert exc.value_a == 50
+        assert exc.value_b == 51
+        assert exc.entity == await Person.get(index=Person.unique_name, arg="bob")
 
     context.run(main)
