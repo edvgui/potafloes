@@ -7,8 +7,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 from potafloes.attachments import bag
 from potafloes.context import Context
-from potafloes.entity import Entity, implementation, exchange
-from potafloes.entity_type import index
+from potafloes.entity import Entity, exchange
+from potafloes.entity_type import index, implementation
 
 
 class Person(Entity):

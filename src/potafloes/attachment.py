@@ -121,7 +121,7 @@ class Attachment(typing.Generic[X]):
             for callback in self._callbacks:
                 self._trigger_callback(callback, __item)
 
-    def __iadd__(self: A, other: X | Attachment[X] | None) -> A:
+    def __iadd__(self, other: X | Attachment[X]) -> Attachment[X]:
         """
         When using the += operator, we expect the other element to be either an attachment,
         in which case we will subscribe to it and add all its items to this attachment, or
@@ -131,7 +131,7 @@ class Attachment(typing.Generic[X]):
             if not issubclass(other._object_type, self._object_type):
                 raise ValueError(f"Can not add items of type {other._object_type} to {self}")
 
-            other.subscribe(attachment=self)  # type: ignore
+            other.subscribe(attachment=self)
             return self
 
         self.send(other)

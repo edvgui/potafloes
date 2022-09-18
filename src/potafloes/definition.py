@@ -33,8 +33,7 @@ class Definition:
                 eval(self.type_expression, self.globals, self.locals),
             )
 
-        res = getattr(self, "_type_result")
-        assert isinstance(res, type), type(res)
+        res: type = getattr(self, "_type_result")
         return res
 
     def validate(self, attribute: object) -> object:
