@@ -19,8 +19,7 @@ class Single(attachment.Attachment[X]):
     ) -> None:
         super().__init__(bearer, placeholder, object_type, definition)
         self._completed: asyncio.Future[X] = asyncio.Future(loop=self._context.event_loop)
-
-        self._context.register(self._completed)  # type: ignore
+        self._context.register(self._completed)
 
     def _insert(self, item: X) -> None:
         if not self._completed.done():

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import asyncio
 
 import typing
 
@@ -54,6 +53,8 @@ def test_reassign_value(
         bob = Person(name="bob")
         alice = Person(name="alice")
 
+        alice.best_friend += None
+
         bob.best_friend += alice
         bob.best_friend += alice  # reassigning the same value should work
 
@@ -75,6 +76,8 @@ def test_mistyped(
         with pytest.raises(TypeError):
             bob.best_friend += object()  # object has the wrong type
 
+        bob.best_friend += None
+
     context.run(main)
 
 
@@ -85,6 +88,10 @@ def test_double_bind(context: potafloes.Context, person_class: type[potafloes.En
         bob = Person(name="bob")
         alice = Person(name="alice")
         eve = Person(name="eve")
+
+        bob.best_friend += None
+        alice.best_friend += None
+        eve.best_friend += None
 
         # Alice is a child of bob
         bob.children += alice
@@ -110,6 +117,10 @@ def test_attachment_extension(context: potafloes.Context, person_class: type[pot
         bob = Person(name="bob")
         alice = Person(name="alice")
         eve = Person(name="eve")
+
+        bob.best_friend += None
+        alice.best_friend += None
+        eve.best_friend += None
 
         # All parents of alice are parents of eve (they are siblings)
         # And reciprocally

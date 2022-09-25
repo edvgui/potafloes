@@ -22,11 +22,11 @@ class Context:
 
     def __init__(self, name: str) -> None:
         self.name = name
-        self.tasks: list[asyncio.Task[object]] = []
+        self.tasks: list[asyncio.Task[object] | asyncio.Future[object]] = []
 
         self._initialized: bool = False
         self._frozen: bool = False
-        self._finalizer: asyncio.Future[list[object]] | None = None
+        self._finalizer: asyncio.Future[None] | None = None
 
         self.logger = logging.getLogger(str(self))
         self.logger.debug("New context created")
@@ -43,7 +43,7 @@ class Context:
     def event_loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
 
-    def register(self, task: asyncio.Task[object]) -> None:
+    def register(self, task: asyncio.Task[typing.Any] | asyncio.Future[typing.Any]) -> None:
         self.tasks.append(task)
 
     def init(self) -> None:
@@ -61,19 +61,15 @@ class Context:
 
         self.event_loop.set_exception_handler(handle_exception)
 
-    def _finalizer_callback(self, finalizer: asyncio.Future[list[object]]) -> None:
-        if self.tasks:
-            # We still have some pending tasks
-            self.finalize()
-        else:
-            self.freeze()
-
-    def finalize(self) -> None:
+    def finalize(self, *_: object) -> None:
         self.logger.debug(f"Finalizing context with {len(self.tasks)} pending tasks")
         if self.tasks:
-            self._finalizer = asyncio.gather(*self.tasks, return_exceptions=False)
-            self._finalizer.add_done_callback(self._finalizer_callback)
-            self.tasks.clear()
+            tasks = self.tasks
+            self.tasks = []
+            waiter = asyncio.gather(*tasks, return_exceptions=False)
+            waiter.add_done_callback(self.finalize)
+        else:
+            self.freeze()
 
     def freeze(self) -> None:
         # First we make sure that this context is not frozen yet
@@ -81,6 +77,12 @@ class Context:
             raise exceptions.ContextAlreadyFrozenException("This context is already frozen")
 
         self._frozen = True
+        self.logger.debug("Event loop completed")
+
+        if self._finalizer is None:
+            raise RuntimeError("Can not freeze a context that has not been stopped")
+
+        self._finalizer.set_result(None)
 
         # Then we freeze all the entity context related to this context
         from potafloes import entity_context, entity_type
@@ -89,16 +91,16 @@ class Context:
             ec = entity_context.EntityContext[object].get(entity_type=et, context=self)
             ec.freeze()
 
-    def stop(self, *, force: bool = False) -> asyncio.Future[list[object]]:
+    def stop(self, *, force: bool = False) -> asyncio.Future[None]:
         if force:
             self.logger.debug("Stopping loop")
             for task in self.tasks:
                 task.cancel("Task cancelled by context shutdown")
 
         if self._finalizer is None:
+            self._finalizer = asyncio.Future()
             self.finalize()
 
-        assert self._finalizer is not None  # Make mypy happy
         return self._finalizer
 
     def reset(self) -> None:
