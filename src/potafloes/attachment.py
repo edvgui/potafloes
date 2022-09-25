@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 import logging
 import types
 import typing
@@ -91,12 +92,12 @@ class Attachment(typing.Generic[X]):
     ) -> None:
         if attachment is not None:
 
-            async def cb(item: X) -> None:
-                assert attachment is not None  # Make mypy happy
+            async def cb(attachment: Attachment[X], item: X) -> None:
                 attachment.send(item)
 
             cb.__name__ = f"{self}_to_{attachment}"
-            callback = cb
+            callback = functools.partial(cb, attachment)
+            setattr(callback, "__name__", cb.__name__)
 
         if callback is None:
             raise ValueError("At least one of attachment or callback attribute should be set.")
@@ -119,8 +120,6 @@ class Attachment(typing.Generic[X]):
             self._insert(__item)
             for callback in self._callbacks:
                 self._trigger_callback(callback, __item)
-        else:
-            self._logger.debug(f"{__item} is already in {[str(i) for i in self._all()]}")
 
     def __iadd__(self, other: X | Attachment[X]) -> Attachment[X]:
         """

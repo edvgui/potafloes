@@ -7,8 +7,6 @@ import typing
 
 from potafloes import exceptions
 
-LOGGER = logging.getLogger(__name__)
-
 
 class Context:
     """

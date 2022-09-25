@@ -482,5 +482,5 @@ class EntityType(type):
         cls,
         implementation: Implementation[object],
     ) -> None:
-        cls.logger.debug(f"Add implementation {implementation} to {cls}")
+        cls.logger.debug(f"Add implementation {implementation.__name__} to {cls}")
         cls.__registered_implementations.append(implementation)

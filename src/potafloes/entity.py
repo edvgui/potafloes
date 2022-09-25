@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import logging
 import re
 import typing
@@ -17,15 +18,27 @@ def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefi
         this_side: attachment.AttachmentDefinition,
         other_side: attachment.AttachmentDefinition,
     ) -> typing.Callable[[object], typing.Coroutine[typing.Any, typing.Any, None]]:
-        async def balance(this_obj: object) -> None:
-            async def add_to_other_side(other_obj: object) -> None:
+        async def balance(
+            this_side: attachment.AttachmentDefinition,
+            other_side: attachment.AttachmentDefinition,
+            this_obj: object,
+        ) -> None:
+            async def add_to_other_side(
+                this_obj: object,
+                other_side: attachment.AttachmentDefinition,
+                other_obj: object,
+            ) -> None:
                 attached = getattr(other_obj, other_side.placeholder)
                 attached.send(this_obj)
 
             attached = getattr(this_obj, this_side.placeholder)
-            attached.subscribe(callback=add_to_other_side)
+            callback = functools.partial(add_to_other_side, this_obj, other_side)
+            setattr(callback, "__name__", add_to_other_side.__name__)
+            attached.subscribe(callback=callback)
 
-        return balance
+        balance_function = functools.partial(balance, this_side, other_side)
+        setattr(balance_function, "__name__", balance.__name__)
+        return balance_function
 
     entity_type.implementation(a.bearer_class)(balance_factory(a, b))
     entity_type.implementation(b.bearer_class)(balance_factory(b, a))
