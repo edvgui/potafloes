@@ -15,8 +15,9 @@ class Single(attachment.Attachment[X]):
         bearer: object,
         placeholder: str,
         object_type: type[X],
+        definition: attachment.AttachmentDefinition,
     ) -> None:
-        super().__init__(bearer, placeholder, object_type)
+        super().__init__(bearer, placeholder, object_type, definition)
         self._completed: asyncio.Future[X] = asyncio.Future(loop=self._context.event_loop)
 
         self._context.register(self._completed)  # type: ignore

@@ -21,7 +21,9 @@ class Attachment(typing.Generic[X]):
     the model.
     """
 
-    def __init__(self, bearer: object, placeholder: str, object_type: type[X] | types.UnionType) -> None:
+    def __init__(
+        self, bearer: object, placeholder: str, object_type: type[X] | types.UnionType, definition: AttachmentDefinition
+    ) -> None:
         """
         :param bearer: The object this attachment is attached to.
         :param placeholder: The name of the object function this attachment is a placeholder for.
@@ -31,6 +33,7 @@ class Attachment(typing.Generic[X]):
         self._bearer = bearer
         self._placeholder = placeholder
         self._object_type = object_type
+        self._definition = definition
 
         self._callbacks: list[typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]] = []
 
@@ -128,9 +131,8 @@ class Attachment(typing.Generic[X]):
         an object, in which case we try to add it to the attachment.
         """
         if isinstance(other, Attachment):
-            if not issubclass(other._object_type, self._object_type):
-                raise ValueError(f"Can not add items of type {other._object_type} to {self}")
-
+            # Validate that the attachment being attached to this one has the correct type
+            self._definition.validate(other)
             other.subscribe(attachment=self)
             return self
 
@@ -163,7 +165,7 @@ class AttachmentDefinition(definition.Definition):
 
     def attachment(self, bearer: object) -> Attachment[object]:
         inner_type = self.inner_type()
-        return self.outer_type(bearer, self.placeholder, inner_type)
+        return self.outer_type(bearer, self.placeholder, inner_type, self)
 
     def validate(self, attribute: object) -> object:
         """

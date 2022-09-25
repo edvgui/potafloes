@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import logging
 import sys
@@ -15,6 +16,8 @@ def context() -> typing.Generator[potafloes.Context, None, None]:
     importlib.reload(potafloes)
 
     context = potafloes.Context.get()
+    context.reset()
+
     yield context
 
 

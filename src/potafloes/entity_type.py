@@ -335,12 +335,8 @@ class EntityType(type):
             # The attachment can be overwritten if the type of the new attachment
             # is a subclass of the type of the old attachment
             existing_attachment = attachments[a.placeholder]
-            if not issubclass(a.outer_type, existing_attachment.outer_type):
-                raise ValueError(f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type.")
-
             try:
-                if not issubclass(a.inner_type(), existing_attachment.inner_type()):
-                    raise ValueError(f"Can not overwrite {existing_attachment} with {a}: inconsistent attachment type.")
+                existing_attachment.validate(a)
             except NameError:
                 # We get a name error when inner type can not be resolved yet
                 # We will simply assume the inner type is set correctly
