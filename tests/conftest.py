@@ -6,12 +6,16 @@ import typing
 import pytest
 
 import potafloes
+import potafloes.entity
+import potafloes.entity_type
 
 LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="function")
 def context() -> typing.Generator[potafloes.Context, None, None]:
+    importlib.reload(potafloes.entity_type)
+    importlib.reload(potafloes.entity)
     importlib.reload(potafloes)
 
     context = potafloes.Context.get()
