@@ -100,10 +100,12 @@ class Attachment(typing.Generic[X]):
 
             cb.__name__ = f"{self}_to_{attachment}"
             callback = functools.partial(cb, attachment)
-            setattr(callback, "__name__", cb.__name__)
 
         if callback is None:
             raise ValueError("At least one of attachment or callback parameter should be set.")
+
+        if isinstance(callback, functools.partial):
+            setattr(callback, "__name__", callback.func.__name__)
 
         self._callbacks.append(callback)
         for item in self._all():

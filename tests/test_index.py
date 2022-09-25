@@ -50,6 +50,27 @@ def test_double_set(
         assert exc.attribute == "age"
         assert exc.value_a == 50
         assert exc.value_b == 51
-        assert exc.entity == await Person.get(index=Person.unique_name, arg="bob")
+        assert exc.entity is await Person.get(index=Person.unique_name, arg="bob")
+
+    context.run(main)
+
+
+def test_inheritance(
+    context: potafloes.Context,
+    person_class: type[potafloes.Entity],
+) -> None:
+    Person = person_class
+
+    class Dad(Person):
+        pass
+
+    async def main() -> None:
+        bob = Person(name="bob", age=30)
+        dad = Dad(name="bob", age=31)
+
+        assert bob is not dad
+        assert await Person.get(index=Person.unique_name, arg="bob") is bob
+        assert await Dad.get(index=Person.unique_name, arg="bob") is dad
+        assert await Dad.get(index=Dad.unique_name, arg="bob") is dad
 
     context.run(main)
