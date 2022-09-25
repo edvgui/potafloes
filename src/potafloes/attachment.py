@@ -103,7 +103,7 @@ class Attachment(typing.Generic[X]):
             setattr(callback, "__name__", cb.__name__)
 
         if callback is None:
-            raise ValueError("At least one of attachment or callback attribute should be set.")
+            raise ValueError("At least one of attachment or callback parameter should be set.")
 
         self._callbacks.append(callback)
         for item in self._all():
