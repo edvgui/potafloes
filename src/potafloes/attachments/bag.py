@@ -25,17 +25,8 @@ class Bag(attachment.Attachment[X]):
 
         self._items: set[X] = set()
 
-    def _insert(self, item: X | None) -> bool:
-        if item is None:
-            # We skip None items
-            return False
-
-        if item in self._items:
-            # We skip items which are already in the set
-            return False
-
+    def _insert(self, item: X) -> None:
         self._items.add(item)
-        return True
 
     def _all(self) -> typing.Iterable[X]:
         return self._items

@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import logging
+import types
 import typing
 
 from potafloes import context, definition, exceptions
@@ -19,7 +20,7 @@ class Attachment(typing.Generic[X]):
     the model.
     """
 
-    def __init__(self, bearer: object, placeholder: str, object_type: type[X]) -> None:
+    def __init__(self, bearer: object, placeholder: str, object_type: type[X] | types.UnionType) -> None:
         """
         :param bearer: The object this attachment is attached to.
         :param placeholder: The name of the object function this attachment is a placeholder for.
@@ -32,7 +33,7 @@ class Attachment(typing.Generic[X]):
 
         self._callbacks: list[typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]] = []
 
-        self._context = context.Context()
+        self._context = context.Context.get()
         self._logger = logging.getLogger(str(self))
 
     def _trigger_callback(
@@ -55,10 +56,9 @@ class Attachment(typing.Generic[X]):
         )
 
     @abc.abstractmethod
-    def _insert(self, item: X) -> bool:
+    def _insert(self, item: X) -> None:
         """
-        Insert this item into this attachment.  Returns True if the insertion
-        was impacting for the attachment, False otherwise.
+        Insert this item into this attachment.  The item is guaranteed to not be present in _all()
         """
 
     @abc.abstractmethod
@@ -95,6 +95,7 @@ class Attachment(typing.Generic[X]):
                 assert attachment is not None  # Make mypy happy
                 attachment.send(item)
 
+            cb.__name__ = f"{self}_to_{attachment}"
             callback = cb
 
         if callback is None:
@@ -108,18 +109,18 @@ class Attachment(typing.Generic[X]):
         """
         Send an item and assign it to this attachment
         """
-        if __item is None:
-            self._insert(None)
-            return
-
         if not isinstance(__item, self._object_type):
             # Unexpected type for provided item, we raise an exception
             raise exceptions.AttachmentItemTypeException(self, __item)
 
-        if self._insert(__item):
-            # If the insertion changed something, we trigger all the known callback
+        if __item not in self._all():
+            # We only add the item if it is not yet included in the attachment
+            # Then we trigger all the known callbacks
+            self._insert(__item)
             for callback in self._callbacks:
                 self._trigger_callback(callback, __item)
+        else:
+            self._logger.debug(f"{__item} is already in {[str(i) for i in self._all()]}")
 
     def __iadd__(self, other: X | Attachment[X]) -> Attachment[X]:
         """
@@ -150,11 +151,14 @@ class AttachmentDefinition(definition.Definition):
 
     outer_type: type[Attachment[object]]
 
-    def inner_type(self) -> type:
+    def inner_type(self) -> type | types.UnionType:
         if not hasattr(self._type, "__args__"):
             raise ValueError(f"Incomplete attachment type: {self.type_expression}")
 
         res = getattr(self._type, "__args__")[0]
+        if isinstance(res, types.UnionType):
+            return res
+
         assert isinstance(res, type), type(res)
         return res
 
@@ -163,11 +167,26 @@ class AttachmentDefinition(definition.Definition):
         return self.outer_type(bearer, self.placeholder, inner_type)
 
     def validate(self, attribute: object) -> object:
+        """
+        When validating an attachment assigned to an attachment placeholder, we verify:
+        1. The the type of attachment is the same.
+        2. The inner type of the attachment being attached is a subclass of the attachment
+            defined in annotations.
+        """
         if not isinstance(attribute, self.outer_type):
             raise ValueError(f"Unexpected type for {self.placeholder}: " f"{type(attribute)} (expected {self.outer_type})")
 
         inner_type = self.inner_type()
-        if not isinstance(inner_type, typing.ForwardRef) and not issubclass(attribute._object_type, inner_type):
+        if isinstance(attribute._object_type, types.UnionType):
+            for attribute_inner_type in attribute._object_type.__args__:
+                if not issubclass(attribute_inner_type, inner_type):
+                    raise ValueError(
+                        f"Unexpected inner type for {self.placeholder}: "
+                        f"{type(attribute_inner_type)} (expected {inner_type})"
+                    )
+            return attribute
+
+        if not issubclass(attribute._object_type, inner_type):
             raise ValueError(
                 f"Unexpected inner type for {self.placeholder}: " f"{type(attribute._object_type)} (expected {inner_type})"
             )

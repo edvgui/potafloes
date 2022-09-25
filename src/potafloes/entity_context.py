@@ -139,7 +139,7 @@ class EntityContext(typing.Generic[X]):
         If none exists yet, and create_ok is True, then a new one is created.
         """
         if context is None:
-            context = Context()
+            context = Context.get()
 
         identifier = (entity_type, context)
         if identifier not in cls.__entity_contexts:

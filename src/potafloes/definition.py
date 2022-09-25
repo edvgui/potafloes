@@ -37,6 +37,9 @@ class Definition:
         return res
 
     def validate(self, attribute: object) -> object:
+        """
+        Validate that the value assigned to this definition has the correct type.
+        """
         attribute_type = self._type
         if not isinstance(attribute, attribute_type):
             raise TypeError(f"{repr(attribute)} has type {type(attribute)}, expected {attribute_type} for {self}")

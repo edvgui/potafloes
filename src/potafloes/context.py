@@ -22,15 +22,8 @@ class Context:
 
     __contexts: dict[str, Context] = {}
 
-    def __new__(cls: type[Context]) -> Context:
-        context_name = threading.current_thread().name
-        if context_name not in cls.__contexts:
-            cls.__contexts[context_name] = object.__new__(cls)
-
-        return cls.__contexts[context_name]
-
-    def __init__(self) -> None:
-        self.name = threading.current_thread().name
+    def __init__(self, name: str) -> None:
+        self.name = name
         self.tasks: list[asyncio.Task[object]] = []
 
         self._initialized: bool = False
@@ -137,3 +130,11 @@ class Context:
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"
+
+    @classmethod
+    def get(cls) -> Context:
+        name = threading.current_thread().name
+        if name not in cls.__contexts:
+            cls.__contexts[name] = Context(name)
+
+        return cls.__contexts[name]

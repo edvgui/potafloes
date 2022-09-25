@@ -78,6 +78,6 @@ class AttachmentItemTypeException(TypeError, PotafloesException):
     def __str__(self) -> str:
         return (
             f"{type(self.attachment).__name__}@{self.attachment._bearer}.{self.attachment._placeholder} "
-            f"expects times of type {self.attachment._object_type.__name__} but item {self.item} "
+            f"expects times of type {self.attachment._object_type} but item {self.item} "
             f"has type {type(self.item).__name__}."
         )

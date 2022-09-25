@@ -284,7 +284,8 @@ class EntityType(type):
         cls.__annotations = dict()
 
         cls.logger.debug(f"Reading annotations for {cls.name}")
-        globals = getattr(sys.modules.get(cls.__module__, None), "__dict__", {})
+        class_module = sys.modules.get(cls.__module__, None)
+        globals = getattr(class_module, "__dict__", {})
         locals = dict(vars(cls))
         ann = cls.__dict__.get("__annotations__", {})
 

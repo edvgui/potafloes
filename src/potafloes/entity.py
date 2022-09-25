@@ -97,7 +97,7 @@ class Entity(metaclass=entity_type.EntityType):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self._context = context.Context()
+        self._context = context.Context.get()
         self._logger = logging.getLogger(str(self))
         self._created = True
 

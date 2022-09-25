@@ -62,10 +62,10 @@ async def main() -> None:
     Test(name="alice", likes_dogs=False, parents=marilyn.parents)
 
     bob_2 = await Person.get(index=Person.unique_name, arg="bob")
-    assert bob == bob_2
-    assert bob == await will_be_bob
+    assert bob is bob_2
+    assert bob is await will_be_bob
 
-Context().run(main)
+Context.get().run(main)
 
 person_context = EntityContext.get(entity_type=Person)
 test_context = EntityContext.get(entity_type=Test)
@@ -86,5 +86,5 @@ assert bob in marilyn.parents._all()
 
 assert Test.parents is Person.parents
 
-Context().reset()
-Context().run(main)
+Context.get().reset()
+Context.get().run(main)
