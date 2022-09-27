@@ -68,7 +68,7 @@ class EntityContext(typing.Generic[X]):
         for (index, arg), future in self._queries.items():
             if index(instance) == arg:
                 self.logger.debug("Resolving query %s=%s with %s", str(index), str(arg), str(instance))
-                future.set_value(instance)  # type: ignore
+                future.set_result(instance)  # type: ignore
                 resolved.append((index, arg))
 
         for res in resolved:
@@ -88,7 +88,7 @@ class EntityContext(typing.Generic[X]):
             return self._queries[identifier]
 
         self.logger.debug("Register query %s=%s", str(query), str(result))
-        self._queries[identifier] = asyncio.Future(loop=self.context.event_loop)
+        self._queries[identifier] = asyncio.Future()
         return self._queries[identifier]
 
     def find_instance(self, *, query: typing.Callable[[X], Y], result: Y) -> X:

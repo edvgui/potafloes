@@ -1,11 +1,12 @@
 from __future__ import annotations
+import asyncio
 
 import functools
 import logging
 import re
 import typing
 
-from potafloes import attachment, context, entity_context, entity_type
+from potafloes import attachment, context, entity_context, entity_type, const
 
 X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
@@ -90,39 +91,36 @@ class Entity(metaclass=entity_type.EntityType):
     This is the base class to any data part of the single state model.
     """
 
-    _context: context.Context = object()  # type: ignore
-    """
-    This value is set automatically when the instance is constructed
-    """
-
-    _logger: logging.Logger = object()  # type: ignore
-    """
-    This value is set automatically when the instance is constructed
-    """
-
-    _created: bool = False
-    """
-    This value is set to True once all the initial attribute assignment is done.
-    From that point, __setattr__ will raise an exception.
-    """
-
     def __init__(self, **kwargs: object) -> None:
+        self._created = False
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
         self._context = context.Context.get()
         self._logger = logging.getLogger(str(self))
+
+        creator = const.ENTITY_SCOPE.get()
+        self._created_by: object | None
+        if creator is None:
+            self._logger.debug("Created in main context")
+            self._created_by = None
+        else:
+            self._logger.debug(f"Created by {creator}")
+            self._created_by = creator
+
         self._created = True
 
     def __setattr__(self, __name: str, __value: typing.Any) -> None:
         # If we don't get that here, we will fail to set _created to True
-        created = self._created
+        if __name == "_created":
+            return super().__setattr__(__name, __value)
 
         previous_value = getattr(self, __name, None)
         super().__setattr__(__name, __value)
         new_value = getattr(self, __name)
 
-        if created and previous_value is not new_value:
+        if self._created and previous_value is not new_value:
             raise RuntimeError("Can not modify created entity.")
 
     def __str__(self) -> str:

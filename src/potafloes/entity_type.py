@@ -1,4 +1,5 @@
 from __future__ import annotations
+import contextvars
 
 import dataclasses
 import inspect
@@ -7,7 +8,7 @@ import re
 import sys
 import typing
 
-from potafloes import attachment, attribute, entity_context, exceptions
+from potafloes import attachment, attribute, entity_context, exceptions, const
 
 X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
@@ -166,8 +167,8 @@ class EntityType(type):
                 # existing attachment in the current instance
                 for a in to_be_bound.values():
                     current_attachment: attachment.Attachment[object] = getattr(instance, a._placeholder)
-                    a.subscribe(attachment=current_attachment)
-                    current_attachment.subscribe(attachment=a)
+                    a += current_attachment
+                    current_attachment += a
 
                 return instance
             except LookupError:
@@ -187,6 +188,8 @@ class EntityType(type):
                 new_attachment.subscribe(attachment=arg_attachment)
 
         # Trigger all the implementations for this newly created object
+        print("Set scope to ", str(new_object))
+        previous_scope = const.ENTITY_SCOPE.set(new_object)
         for callback in cls._implementations():
             name = f"{callback}({new_object})"
             cls.logger.debug(
@@ -201,6 +204,8 @@ class EntityType(type):
                     name=name,
                 )
             )
+        print("Reset scope")
+        const.ENTITY_SCOPE.reset(previous_scope)
 
         # Register the new instance in the context
         ec.add_instance(new_object)

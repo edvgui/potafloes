@@ -202,7 +202,7 @@ Y = typing.TypeVar("Y", bound=object)
 ATTACHMENT_TYPES: set[type[Attachment[typing.Any]]] = set()
 
 
-def entity_attachment(attachment_class: type[Attachment[Y]]) -> type[Attachment[Y]]:
+def entity_attachment(attachment_class: type[A]) -> type[A]:
     """
     Use this decorator to register a new attachment type.  This type can then
     be used on any entity attribute and will automatically be built when the

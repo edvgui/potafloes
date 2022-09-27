@@ -27,6 +27,7 @@ class Context:
         self._initialized: bool = False
         self._frozen: bool = False
         self._finalizer: asyncio.Future[None] | None = None
+        self._errors: list[Exception] = []
 
         self.logger = logging.getLogger(str(self))
         self.logger.debug("New context created")
@@ -55,8 +56,17 @@ class Context:
 
         # Finally, we setup the exception handler for our loop
         def handle_exception(loop: asyncio.AbstractEventLoop, context: dict[str, object]) -> None:
-            msg = context.get("exception", context["message"])
-            self.logger.error(f"Caught exception: {msg}")
+            exception = context.get("exception")
+
+            if isinstance(exception, asyncio.CancelledError):
+                # A task got cancelled
+                pass
+            elif exception is not None:
+                assert isinstance(exception, Exception), f"{type(exception)}: {exception}"
+                self._errors.append(exception)
+            else:
+                self._errors.append(RuntimeError(context["message"]))
+
             self.stop(force=True)
 
         self.event_loop.set_exception_handler(handle_exception)
@@ -127,6 +137,9 @@ class Context:
             await self.stop()
 
         asyncio.run(run())
+
+        if self._errors:
+            raise self._errors[0]
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"
