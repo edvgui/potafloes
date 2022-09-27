@@ -68,7 +68,7 @@ class EntityContext(typing.Generic[X]):
         for (index, arg), future in self._queries.items():
             if index(instance) == arg:
                 self.logger.debug("Resolving query %s=%s with %s", str(index), str(arg), str(instance))
-                future.set_result(instance)  # type: ignore
+                future.set_result(instance)
                 resolved.append((index, arg))
 
         for res in resolved:
