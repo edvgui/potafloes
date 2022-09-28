@@ -5,7 +5,7 @@ import typing
 
 from potafloes import attachment, exceptions
 
-X = typing.TypeVar("X")
+X = typing.TypeVar("X", bound=object)
 
 
 @attachment.entity_attachment

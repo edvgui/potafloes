@@ -1,5 +1,4 @@
 from __future__ import annotations
-import contextvars
 
 import dataclasses
 import inspect
@@ -7,8 +6,9 @@ import logging
 import re
 import sys
 import typing
+from abc import abstractmethod
 
-from potafloes import attachment, attribute, entity_context, exceptions, const
+from potafloes import attachment, attribute, const, entity_context, exceptions
 
 X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
@@ -21,13 +21,13 @@ Index = typing.Callable[[X], object]
 Implementation = typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
 
 
-def implementation(entity_type: EntityType) -> typing.Callable[[Implementation[object]], Implementation[object]]:
+def implementation(entity_type: type[X]) -> typing.Callable[[Implementation[X]], Implementation[X]]:
     """
     Register a function that should be called for each instance of the specified entity type.
     """
 
-    def register_implementation(func: Implementation[object]) -> Implementation[object]:
-        entity_type._add_implementation(implementation=func)
+    def register_implementation(func: Implementation[X]) -> Implementation[X]:
+        entity_type._add_implementation(implementation=func)  # type: ignore
         return func
 
     return register_implementation
@@ -170,6 +170,7 @@ class EntityType(type):
                     a += current_attachment
                     current_attachment += a
 
+                cls.construct_callback(instance)  # type: ignore
                 return instance
             except LookupError:
                 continue
@@ -188,7 +189,6 @@ class EntityType(type):
                 new_attachment.subscribe(attachment=arg_attachment)
 
         # Trigger all the implementations for this newly created object
-        print("Set scope to ", str(new_object))
         previous_scope = const.ENTITY_SCOPE.set(new_object)
         for callback in cls._implementations():
             name = f"{callback}({new_object})"
@@ -204,11 +204,13 @@ class EntityType(type):
                     name=name,
                 )
             )
-        print("Reset scope")
         const.ENTITY_SCOPE.reset(previous_scope)
 
         # Register the new instance in the context
         ec.add_instance(new_object)
+
+        # Call the construct callback function on the entity type
+        cls.construct_callback(new_object)
 
         return new_object
 
@@ -225,6 +227,14 @@ class EntityType(type):
             return cls._attributes()[__name]
 
         return super().__getattr__(__name)  # type: ignore
+
+    @abstractmethod
+    def construct_callback(cls: type[X], instance: X) -> None:
+        """
+        This method is called each time the constructor of the class :attr cls: is called and
+        generates the instance :attr instance:.  This is not only called when a new instance
+        is created, but also when an instance constructor calls returns an existing object.
+        """
 
     def _bases(cls) -> typing.Generator[EntityType, None, None]:
         """

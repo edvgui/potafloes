@@ -1,12 +1,12 @@
 from __future__ import annotations
-import asyncio
 
 import functools
 import logging
 import re
 import typing
 
-from potafloes import attachment, context, entity_context, entity_type, const
+from potafloes import attachment, const, context, entity_context, entity_type
+from potafloes.attachments import bag
 
 X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
@@ -18,7 +18,7 @@ def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefi
     def balance_factory(
         this_side: attachment.AttachmentDefinition,
         other_side: attachment.AttachmentDefinition,
-    ) -> typing.Callable[[object], typing.Coroutine[typing.Any, typing.Any, None]]:
+    ) -> typing.Callable[[Entity], typing.Coroutine[typing.Any, typing.Any, None]]:
         async def balance(
             this_side: attachment.AttachmentDefinition,
             other_side: attachment.AttachmentDefinition,
@@ -29,10 +29,10 @@ def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefi
                 other_side: attachment.AttachmentDefinition,
                 other_obj: object,
             ) -> None:
-                attached = getattr(other_obj, other_side.placeholder)
+                attached: attachment.Attachment[object] = getattr(other_obj, other_side.placeholder)
                 attached.send(this_obj)
 
-            attached = getattr(this_obj, this_side.placeholder)
+            attached: attachment.Attachment[object] = getattr(this_obj, this_side.placeholder)
             callback = functools.partial(add_to_other_side, this_obj, other_side)
             setattr(callback, "__name__", add_to_other_side.__name__)
             attached.subscribe(callback=callback)
@@ -89,7 +89,16 @@ You can now do
 class Entity(metaclass=entity_type.EntityType):
     """
     This is the base class to any data part of the single state model.
+
+    :attr producers: The entities that called this entity constructor.
+    :attr products: The entities created by this one.
+    :attr readers: The entities that accessed this one, in a query or in
+        an attachment subscription.
     """
+
+    producers: bag.Bag[Entity]
+    products: bag.Bag[Entity]
+    readers: bag.Bag[Entity]
 
     def __init__(self, **kwargs: object) -> None:
         self._created = False
@@ -100,16 +109,16 @@ class Entity(metaclass=entity_type.EntityType):
         self._context = context.Context.get()
         self._logger = logging.getLogger(str(self))
 
-        creator = const.ENTITY_SCOPE.get()
-        self._created_by: object | None
-        if creator is None:
-            self._logger.debug("Created in main context")
-            self._created_by = None
-        else:
-            self._logger.debug(f"Created by {creator}")
-            self._created_by = creator
-
         self._created = True
+
+    @classmethod
+    def construct_callback(cls, instance: Entity) -> None:
+        producer = const.ENTITY_SCOPE.get()
+        if isinstance(producer, Entity):
+            instance.producers.send(producer)
+            instance._logger.debug(f"Built by {producer}")
+        else:
+            instance._logger.debug(f"Built in scope {producer}")
 
     def __setattr__(self, __name: str, __value: typing.Any) -> None:
         # If we don't get that here, we will fail to set _created to True
@@ -140,9 +149,31 @@ class Entity(metaclass=entity_type.EntityType):
         ec = entity_context.EntityContext.get(entity_type=cls)
 
         try:
-            return ec.find_instance(query=index, result=arg)
+            instance = ec.find_instance(query=index, result=arg)
         except LookupError:
-            return await ec.add_query(query=index, result=arg)
+            instance = await ec.add_query(query=index, result=arg)
+
+        # Register who is accessing the entity
+        reader = const.ENTITY_SCOPE.get()
+        if isinstance(reader, Entity):
+            instance.readers.send(reader)
+            instance._logger.debug(f"Accessed by {reader}")
+        else:
+            instance._logger.debug(f"Accessed in scope {reader}")
+
+        return instance
+
+
+Entity.producers < exchange() > Entity.products
+"""
+For every entity a that creates an entity b, the entity a has b in its
+products, and b has a in its producers.
+"""
+
+
+@entity_type.implementation(Entity)
+async def producers_are_readers(entity: Entity) -> None:
+    entity.readers += entity.producers
 
 
 E = typing.TypeVar("E", bound=Entity)

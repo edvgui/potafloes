@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import typing
 
-import pytest
-
 import potafloes
 import potafloes.exceptions
 
@@ -40,3 +38,12 @@ def test_basic(
         alice.friend_name.send("bob")
 
     context.run(main)
+
+    person_context = potafloes.EntityContext.get(entity_type=Person, context=context)
+    bob = person_context.find_instance(query=Person.unique_name, result="bob")
+    alice = person_context.find_instance(query=Person.unique_name, result="alice")
+
+    assert bob in alice.producers._all()
+    assert bob in alice.products._all()
+    assert alice in bob.producers._all()
+    assert alice in bob.products._all()

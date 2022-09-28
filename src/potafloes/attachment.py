@@ -197,7 +197,7 @@ class AttachmentDefinition(definition.Definition):
         return attribute
 
 
-A = typing.TypeVar("A", bound=Attachment[object])
+A = typing.TypeVar("A", bound=Attachment[typing.Any])
 Y = typing.TypeVar("Y", bound=object)
 ATTACHMENT_TYPES: set[type[Attachment[typing.Any]]] = set()
 
