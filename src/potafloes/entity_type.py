@@ -10,7 +10,8 @@ from abc import abstractmethod
 
 from potafloes import attachment, attribute, const, entity_context, exceptions
 
-X = typing.TypeVar("X")
+X = typing.TypeVar("X", bound=object)
+Y = typing.TypeVar("Y", bound=object)
 INDEX_MARKER = "entity_index"
 DOUBLE_BIND_MARKER = "double_bind"
 ENTITY_TYPES: set[EntityType] = set()
@@ -33,13 +34,13 @@ def implementation(entity_type: type[X]) -> typing.Callable[[Implementation[X]],
     return register_implementation
 
 
-def index(func: typing.Callable[[object], X]) -> typing.Callable[[object], X]:
+def index(func: typing.Callable[[Y], X]) -> typing.Callable[[Y], X]:
     """
     Mark the current method as an index for the class it is a method of.
     """
     cached_result_attr = f"__{func.__name__}_index"
 
-    def index_or_cache(self: object) -> X:
+    def index_or_cache(self: Y) -> X:
         if not hasattr(self, cached_result_attr):
             object.__setattr__(self, cached_result_attr, func(self))
 

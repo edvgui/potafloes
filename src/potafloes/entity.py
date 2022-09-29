@@ -41,8 +41,8 @@ def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefi
         setattr(balance_function, "__name__", balance.__name__)
         return balance_function
 
-    entity_type.implementation(a.bearer_class)(balance_factory(a, b))
-    entity_type.implementation(b.bearer_class)(balance_factory(b, a))
+    entity_type.implementation(a.bearer_class)(balance_factory(a, b))  # type: ignore
+    entity_type.implementation(b.bearer_class)(balance_factory(b, a))  # type: ignore
 
 
 class AttachmentExchanger:
@@ -173,7 +173,7 @@ products, and b has a in its producers.
 
 @entity_type.implementation(Entity)
 async def producers_are_readers(entity: Entity) -> None:
-    entity.readers += entity.producers
+    entity.readers += entity.producers  # type: ignore
 
 
 E = typing.TypeVar("E", bound=Entity)

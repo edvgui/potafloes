@@ -9,7 +9,7 @@ import potafloes.exceptions
 
 
 @pytest.fixture
-def person_class(context: potafloes.Context, attach_to_module: typing.Callable[[type]]) -> type[potafloes.Entity]:
+def person_class(context: potafloes.Context, attach_to_module: typing.Callable[[type], None]) -> type[potafloes.Entity]:
     class Person(potafloes.Entity):
         name: str
         parents: potafloes.Bag[Person]
