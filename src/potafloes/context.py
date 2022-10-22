@@ -33,7 +33,7 @@ class Context:
         self.logger.debug("New context created")
 
     @property
-    def initalized(self) -> bool:
+    def initialized(self) -> bool:
         return self._initialized
 
     @property
@@ -49,7 +49,7 @@ class Context:
 
     def init(self) -> None:
         # First, we make sure that the context is not already initialized
-        if self.initalized:
+        if self.initialized:
             raise exceptions.ContextAlreadyInitializedException("This context is already initialized")
 
         self._initialized = True
