@@ -22,7 +22,11 @@ class Attachment(typing.Generic[X]):
     """
 
     def __init__(
-        self, bearer: object, placeholder: str, object_type: type[X] | types.UnionType, definition: AttachmentDefinition
+        self,
+        bearer: object,
+        placeholder: str,
+        object_type: type[X] | types.UnionType,
+        definition: AttachmentDefinition,
     ) -> None:
         """
         :param bearer: The object this attachment is attached to.
@@ -35,7 +39,9 @@ class Attachment(typing.Generic[X]):
         self._object_type = object_type
         self._definition = definition
 
-        self._callbacks: list[typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]] = []
+        self._callbacks: list[
+            typing.Callable[[X], typing.Coroutine[typing.Any, typing.Any, None]]
+        ] = []
 
         self._context = context.Context.get()
         self._logger = logging.getLogger(str(self))
@@ -102,7 +108,9 @@ class Attachment(typing.Generic[X]):
             callback = functools.partial(cb, attachment)
 
         if callback is None:
-            raise ValueError("At least one of attachment or callback parameter should be set.")
+            raise ValueError(
+                "At least one of attachment or callback parameter should be set."
+            )
 
         if isinstance(callback, functools.partial):
             setattr(callback, "__name__", callback.func.__name__)
@@ -177,7 +185,10 @@ class AttachmentDefinition(definition.Definition):
             defined in annotations.
         """
         if not isinstance(attribute, self.outer_type):
-            raise ValueError(f"Unexpected type for {self.placeholder}: " f"{type(attribute)} (expected {self.outer_type})")
+            raise ValueError(
+                f"Unexpected type for {self.placeholder}: "
+                f"{type(attribute)} (expected {self.outer_type})"
+            )
 
         inner_type = self.inner_type()
         if isinstance(attribute._object_type, types.UnionType):
@@ -191,7 +202,8 @@ class AttachmentDefinition(definition.Definition):
 
         if not issubclass(attribute._object_type, inner_type):
             raise ValueError(
-                f"Unexpected inner type for {self.placeholder}: " f"{type(attribute._object_type)} (expected {inner_type})"
+                f"Unexpected inner type for {self.placeholder}: "
+                f"{type(attribute._object_type)} (expected {inner_type})"
             )
 
         return attribute

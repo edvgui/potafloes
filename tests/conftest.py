@@ -25,7 +25,9 @@ def context() -> typing.Generator[potafloes.Context, None, None]:
 
 
 @pytest.fixture(scope="function")
-def attach_to_module(context: potafloes.Context) -> typing.Generator[typing.Callable[[type], None], None, None]:
+def attach_to_module(
+    context: potafloes.Context,
+) -> typing.Generator[typing.Callable[[type], None], None, None]:
     """
     This fixture is a way to allow defining classes in functions for the tests of this package.
 

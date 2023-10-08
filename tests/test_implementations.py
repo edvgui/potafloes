@@ -9,7 +9,9 @@ import potafloes.exceptions
 
 
 @pytest.fixture
-def person_class(context: potafloes.Context, attach_to_module: typing.Callable[[type]]) -> type[potafloes.Entity]:
+def person_class(
+    context: potafloes.Context, attach_to_module: typing.Callable[[type]]
+) -> type[potafloes.Entity]:
     class Person(potafloes.Entity):
         name: str
 
@@ -38,7 +40,9 @@ def test_basic(
 
     context.run(main)
 
-    person_context = potafloes.EntityContext.get(entity_type=person_class, context=context)
+    person_context = potafloes.EntityContext.get(
+        entity_type=person_class, context=context
+    )
     bob = person_context.find_instance(query=Person.unique_name, result="bob")
     alice = person_context.find_instance(query=Person.unique_name, result="alice")
 
@@ -73,7 +77,9 @@ def test_inheritance(
 
     context.run(main)
 
-    person_context = potafloes.EntityContext.get(entity_type=person_class, context=context)
+    person_context = potafloes.EntityContext.get(
+        entity_type=person_class, context=context
+    )
     bob = person_context.find_instance(query=Person.unique_name, result="bob")
     dad_context = potafloes.EntityContext.get(entity_type=Dad, context=context)
     dad = dad_context.find_instance(query=Person.unique_name, result="bob")

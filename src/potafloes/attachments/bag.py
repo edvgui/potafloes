@@ -15,7 +15,11 @@ class Bag(attachment.Attachment[X]):
     """
 
     def __init__(
-        self, bearer: object, placeholder: str, object_type: type[X], definition: attachment.AttachmentDefinition
+        self,
+        bearer: object,
+        placeholder: str,
+        object_type: type[X],
+        definition: attachment.AttachmentDefinition,
     ) -> None:
         """
         :param bearer: The object this bag is attached to.

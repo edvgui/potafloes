@@ -9,7 +9,9 @@ import potafloes.exceptions
 
 
 @pytest.fixture
-def person_class(context: potafloes.Context, attach_to_module: typing.Callable[[type]]) -> type[potafloes.Entity]:
+def person_class(
+    context: potafloes.Context, attach_to_module: typing.Callable[[type]]
+) -> type[potafloes.Entity]:
     class Person(potafloes.Entity):
         name: str
         parents: potafloes.Bag[Person]
@@ -81,7 +83,9 @@ def test_mistyped(
     context.run(main)
 
 
-def test_double_bind(context: potafloes.Context, person_class: type[potafloes.Entity]) -> None:
+def test_double_bind(
+    context: potafloes.Context, person_class: type[potafloes.Entity]
+) -> None:
     Person = person_class
 
     async def main() -> None:
@@ -99,7 +103,9 @@ def test_double_bind(context: potafloes.Context, person_class: type[potafloes.En
 
     context.run(main)
 
-    person_context = potafloes.EntityContext.get(entity_type=person_class, context=context)
+    person_context = potafloes.EntityContext.get(
+        entity_type=person_class, context=context
+    )
     bob = person_context.find_instance(query=Person.unique_name, result="bob")
     alice = person_context.find_instance(query=Person.unique_name, result="alice")
     eve = person_context.find_instance(query=Person.unique_name, result="eve")
@@ -110,7 +116,9 @@ def test_double_bind(context: potafloes.Context, person_class: type[potafloes.En
     assert eve in alice.children._all()
 
 
-def test_attachment_extension(context: potafloes.Context, person_class: type[potafloes.Entity]) -> None:
+def test_attachment_extension(
+    context: potafloes.Context, person_class: type[potafloes.Entity]
+) -> None:
     Person = person_class
 
     async def main() -> None:
@@ -132,17 +140,31 @@ def test_attachment_extension(context: potafloes.Context, person_class: type[pot
 
     context.run(main)
 
-    person_context = potafloes.EntityContext.get(entity_type=person_class, context=context)
+    person_context = potafloes.EntityContext.get(
+        entity_type=person_class, context=context
+    )
     bob = person_context.find_instance(query=Person.unique_name, result="bob")
     alice = person_context.find_instance(query=Person.unique_name, result="alice")
     eve = person_context.find_instance(query=Person.unique_name, result="eve")
 
-    assert len(bob.children._callbacks) == 1, "The only callback should be the double bind"
-    assert len(bob.parents._callbacks) == 1, "The only callback should be the double bind"
-    assert len(alice.children._callbacks) == 1, "The only callback should be the double bind"
-    assert len(alice.parents._callbacks) == 2, "The callbacks should be the double bind and the extension"
-    assert len(eve.children._callbacks) == 1, "The only callback should be the double bind"
-    assert len(eve.parents._callbacks) == 2, "The callbacks should be the double bind and the extension"
+    assert (
+        len(bob.children._callbacks) == 1
+    ), "The only callback should be the double bind"
+    assert (
+        len(bob.parents._callbacks) == 1
+    ), "The only callback should be the double bind"
+    assert (
+        len(alice.children._callbacks) == 1
+    ), "The only callback should be the double bind"
+    assert (
+        len(alice.parents._callbacks) == 2
+    ), "The callbacks should be the double bind and the extension"
+    assert (
+        len(eve.children._callbacks) == 1
+    ), "The only callback should be the double bind"
+    assert (
+        len(eve.parents._callbacks) == 2
+    ), "The callbacks should be the double bind and the extension"
 
     assert bob in alice.parents._all()
     assert bob in eve.parents._all()

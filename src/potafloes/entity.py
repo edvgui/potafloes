@@ -10,10 +10,14 @@ from potafloes import attachment, context, entity_context, entity_type
 X = typing.TypeVar("X")
 INDEX_MARKER = "entity_index"
 DOUBLE_BIND_MARKER = "double_bind"
-TYPE_ANNOTATION_EXPRESSION = re.compile(r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?")
+TYPE_ANNOTATION_EXPRESSION = re.compile(
+    r"([a-zA-Z\.\_]+)(?:\[([a-zA-Z\.\_]+)(?:\,([a-zA-Z\.\_]+))*\])?"
+)
 
 
-def double_bind(a: attachment.AttachmentDefinition, b: attachment.AttachmentDefinition) -> None:
+def double_bind(
+    a: attachment.AttachmentDefinition, b: attachment.AttachmentDefinition
+) -> None:
     def balance_factory(
         this_side: attachment.AttachmentDefinition,
         other_side: attachment.AttachmentDefinition,
@@ -126,7 +130,10 @@ class Entity(metaclass=entity_type.EntityType):
             raise RuntimeError("Can not modify created entity.")
 
     def __str__(self) -> str:
-        queries = [f"{index.__name__}={repr(index(self))}" for index in type(self)._indices().values()]
+        queries = [
+            f"{index.__name__}={repr(index(self))}"
+            for index in type(self)._indices().values()
+        ]
         return f"{type(self).__name__}[{', '.join(queries)}]"
 
     @classmethod
@@ -137,7 +144,9 @@ class Entity(metaclass=entity_type.EntityType):
         in a context where event loop is running or has run.
         """
         if index not in cls._indices().values():
-            raise ValueError(f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}")
+            raise ValueError(
+                f"The provided index '{index.__name__}' can not be found on entity {cls.__name__}"
+            )
 
         ec = entity_context.EntityContext.get(entity_type=cls)
 

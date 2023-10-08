@@ -43,18 +43,24 @@ class Context:
     def event_loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
 
-    def register(self, task: asyncio.Task[typing.Any] | asyncio.Future[typing.Any]) -> None:
+    def register(
+        self, task: asyncio.Task[typing.Any] | asyncio.Future[typing.Any]
+    ) -> None:
         self.tasks.append(task)
 
     def init(self) -> None:
         # First, we make sure that the context is not already initialized
         if self.initalized:
-            raise exceptions.ContextAlreadyInitializedException("This context is already initialized")
+            raise exceptions.ContextAlreadyInitializedException(
+                "This context is already initialized"
+            )
 
         self._initialized = True
 
         # Finally, we setup the exception handler for our loop
-        def handle_exception(loop: asyncio.AbstractEventLoop, context: dict[str, object]) -> None:
+        def handle_exception(
+            loop: asyncio.AbstractEventLoop, context: dict[str, object]
+        ) -> None:
             msg = context.get("exception", context["message"])
             self.logger.error(f"Caught exception: {msg}")
             self.stop(force=True)
@@ -74,7 +80,9 @@ class Context:
     def freeze(self) -> None:
         # First we make sure that this context is not frozen yet
         if self.frozen:
-            raise exceptions.ContextAlreadyFrozenException("This context is already frozen")
+            raise exceptions.ContextAlreadyFrozenException(
+                "This context is already frozen"
+            )
 
         self._frozen = True
         self.logger.debug("Event loop completed")

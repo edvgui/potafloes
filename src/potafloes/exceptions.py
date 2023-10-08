@@ -52,7 +52,9 @@ class DoubleSetException(ValueError, PotafloesException):
     different attributes but matching index.
     """
 
-    def __init__(self, entity: object, attribute: str, value_a: object, value_b: object) -> None:
+    def __init__(
+        self, entity: object, attribute: str, value_a: object, value_b: object
+    ) -> None:
         self.entity = entity
         self.attribute = attribute
         self.value_a = value_a

@@ -42,7 +42,9 @@ class Definition:
         """
         attribute_type = self._type
         if not isinstance(attribute, attribute_type):
-            raise TypeError(f"{repr(attribute)} has type {type(attribute)}, expected {attribute_type} for {self}")
+            raise TypeError(
+                f"{repr(attribute)} has type {type(attribute)}, expected {attribute_type} for {self}"
+            )
 
         return attribute
 
